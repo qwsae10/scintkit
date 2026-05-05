@@ -214,7 +214,7 @@ def make_edge_gap_mask(time, phase, fs, gap_seconds=1, pad_seconds=180):
 
     return mask
 
-def highpass_all_phases(df,fs=None):
+def highpass_all_phases(df,fs=None,tr=1):
     #wrapper to add detrended phases for all available phase columns
     for i in range(1, 4):
         if f"cph{i}" not in df.columns:
@@ -223,7 +223,7 @@ def highpass_all_phases(df,fs=None):
         out_col = f"detrended_cph{i}"
         frequency_col = f"freq_{i}"
 
-        scaled_tr = 1*df[frequency_col].median()/1575.42 if frequency_col in df.columns else 1
+        scaled_tr = tr*df[frequency_col].median()/1575.42 if frequency_col in df.columns else tr
 
         df = highpass_phase(df, in_col=in_col, out_col=out_col, tr=scaled_tr, fs=fs)
     return df
@@ -275,10 +275,10 @@ def clock_correction(df,out_col="detrended_noclk_cph"):
     return df
 
 
-def process_phases(df,fs=None):
+def process_phases(df,fs=None,tr=1):
     fs=detect_sampling_rate(df) if fs is None else fs
 
-    df = highpass_all_phases(df,fs)
+    df = highpass_all_phases(df,fs,tr)
     df = estimate_clock(df)
     df = clock_correction(df)
 

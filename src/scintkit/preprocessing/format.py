@@ -55,7 +55,7 @@ def add_sigs(df):
     'IRNSS_L5': (1176.45, 'Sig1'),'GAL_L1BC': (1575.42, 'Sig1'),
 
     # sig2
-    'GPS_L2C': (1227.60, 'Sig2'), 'GLO_L2C': (1246.60, 'Sig2'),'GLO_L2CA': (1246.60, 'Sig2'),
+    'GPS_L2C': (1227.60, 'Sig2'), 'GLO_L2C': (1246.00, 'Sig2'),'GLO_L2CA': (1246.60, 'Sig2'),
     'QZS_L2C': (1227.60, 'Sig2'), 'GAL_E5a': (1176.45, 'Sig2'),
     'SBAS_L5': (1176.45, 'Sig2'), 'BDS_B2I': (1207.14, 'Sig2'),
     'GEO_L5': (1176.45, 'Sig2'),
@@ -68,12 +68,12 @@ def add_sigs(df):
     'GPS_L2PY': (1227.60, 'Sig4'),
     'GPS_L1P': (1575.42, 'Sig4'),
     'GLO_L1P':(1602.00, 'Sig4'),
-    'GLO_L2P':(1246.60, 'Sig4'),
+    'GLO_L2P':(1246.0, 'Sig4'),
     'GAL_E5':(1191.795, 'Sig4'),
     'GAL_E6BC':(1278.75, 'Sig4'),
     'GLO_L3':(1202.025, 'Sig4')
 }
-    
+
     hardcode_sig_dict={
 
         'GPS':{1:'GPS_L1CA',2:'GPS_L2C',3:'GPS_L5'},

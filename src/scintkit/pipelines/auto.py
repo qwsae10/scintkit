@@ -35,6 +35,7 @@ def process(flist, verbose=False,mode='lvl3'):
     Inputs:
     - flist: list of file paths to process. Can be .bin, .bin.zip, or .pq files. Output files will have same relative path but with _lvl3.pq suffix.
     - verbose: if True, print progress messages.
+    - mode: 'lvl2' to make 1 second rate files. 'lvl3' to make 1 minute rate files. Default is 'lvl3'.
     Outputs:
     - list of output file paths that were created.
 

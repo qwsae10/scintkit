@@ -59,7 +59,7 @@ for i, prn in enumerate(prns):
     g = df[df["prn"] == prn]
 
     # top
-    ax1.plot(g["datetime"], g["tec_cph12"], color="black", lw=0.8)
+    ax1.plot(g["datetime"], g["tec_cph12"],'.', color="black", lw=0.8)
     ax1.set_ylabel("TEC")
     ax1.tick_params(labelbottom=False)
 
