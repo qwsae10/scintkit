@@ -44,7 +44,7 @@ def make_prn_local(dfin):
     return dfin["SIG"].map(constellation_map) + dfin["SVID"].astype(int).astype(str).str.zfill(2)
 
 
-def repair_discontinuities_pos(vec, fs, threshold=10,svid=None):
+def repair_discontinuities_pos(vec, fs, threshold=1,svid=None,verbose=False):
     y = pd.Series(vec).copy()
 
     window = int(10 * fs)
@@ -64,7 +64,9 @@ def repair_discontinuities_pos(vec, fs, threshold=10,svid=None):
     n_slips = int(slip_mask.sum())
  
     if n_slips/len(vec) > 0.2 and len(vec) > 10:
-        print(f"many cycle slips detected for SVID {svid}, something might be wrong with the data")
+        if verbose:
+            print(f"many cycle slips detected for SVID {svid}, {n_slips}/{len(vec)}.")
+    
         return pd.Series(vec), slip_mask, n_slips
     delt_clean = delt.where(good, np.nan)
 

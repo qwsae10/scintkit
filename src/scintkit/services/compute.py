@@ -7,60 +7,95 @@ from scintkit.preprocessing.format import temp_formating
 
 
 import numpy as np
+import pdb
 
-
-def carrier_phase_tec(phi1_rad, phi2_rad, f1_hz, f2_hz):
+def carrier_phase_tec(phi1_cyc, phi2_cyc, f1_hz, f2_hz):
     c = 299792458  # m/s
 
     lambda1 = c / f1_hz
     lambda2 = c / f2_hz
 
-    phi1_m = phi1_rad * lambda1 / (2 * np.pi)
-    phi2_m = phi2_rad * lambda2 / (2 * np.pi)
+    phi1_m = phi1_cyc * lambda1 
+    phi2_m = phi2_cyc * lambda2 
 
     tec_factor = (f1_hz**2 * f2_hz**2) / (40.3 * (f1_hz**2 - f2_hz**2))
 
-    return tec_factor * (phi1_m - phi2_m)
+    return tec_factor * (phi1_m - phi2_m)/1e16
 
 
 def pseudorange_tec(P1_m, P2_m, f1_hz, f2_hz):
     tec_factor = (f1_hz**2 * f2_hz**2) / (40.3 * (f1_hz**2 - f2_hz**2))
 
-    return tec_factor * (P2_m - P1_m)
+    return tec_factor * (P2_m - P1_m)/1e16
+
+def add_tec_columns(df, pair="13", fs=None):
 
 
-def add_tec_columns(df, pair="13"):
 
-    N1 = pair[0]
-    N2 = pair[1]
+    def _per_prn(key, g):
+        g = g.copy()
 
-    f1_hz = df[f"freq{N1}"] * 1e6
-    f2_hz = df[f"freq{N2}"] * 1e6
-    carrier = carrier_phase_tec(
-            phi1_rad=df[f"cph{N1}"],
-            phi2_rad=df[f"cph{N2}"],
-            f1_hz=f1_hz,
-            f2_hz=f2_hz,
+        N1 = pair[0]
+        N2 = pair[1]
+
+        phi1 = g[f"cph{N1}"]
+        phi2 = g[f"cph{N2}"]
+        rng1 = g[f"rng{N1}"]
+        rng2 = g[f"rng{N2}"]
+
+        # if carrier inputs invalid
+        if phi1.isna().all() or phi2.isna().all():
+            carrier = np.full(len(g), np.nan)
+            n_slip_carrier = 0
+        else:
+            f1_hz = g[f"freq_{N1}"] * 1e6
+            f2_hz = g[f"freq_{N2}"] * 1e6
+
+            carrier = carrier_phase_tec(
+                phi1_cyc=phi1,
+                phi2_cyc=phi2,
+                f1_hz=f1_hz,
+                f2_hz=f2_hz,
+            )
+
+            carrier, _, n_slip_carrier = repair_discontinuities_pos(
+                carrier, fs=fs, threshold=1, svid=key, verbose=True
+            )
+
+            carrier = carrier - np.nanmean(carrier)
+
+        # if pseudorange inputs invalid
+        if rng1.isna().all() or rng2.isna().all():
+            pseudo = np.full(len(g), np.nan)
+            n_slip_pseudo = 0
+        else:
+            f1_hz = g[f"freq_{N1}"] * 1e6
+            f2_hz = g[f"freq_{N2}"] * 1e6
+
+            pseudo = pseudorange_tec(
+                P1_m=rng1,
+                P2_m=rng2,
+                f1_hz=f1_hz,
+                f2_hz=f2_hz,
+            )
+
+            pseudo, _, n_slip_pseudo = repair_discontinuities_pos(
+                pseudo, fs=fs, threshold=1, svid=key, verbose=False
+            )
+
+
+
+        g[f"tec_cph{pair}"] = carrier
+        g[f"tec_rng{pair}"] = pseudo
+
+        return g
+    out = (
+        pd.concat(
+            [_per_prn(key, g) for key, g in df.groupby("prn", sort=False)]
         )
-
-
-    pseudo=pseudorange_tec(
-        P1_m=df[f"rng{N1}"],
-        P2_m=df[f"rng{N2}"],
-        f1_hz=f1_hz,
-        f2_hz=f2_hz,
     )
 
-    #cyclslip correction
-    carrier=repair_discontinuities_pos(carrier, fs=fs, threshold=1)[0]
-
-
-    df[f"tec_cph{pair}"] = carrier
-    df[f"tec_rng{pair}"] =pseudo
-
-    return df
-    
-
+    return out.loc[df.index]
 
 def compute_s4(snr):
     snr = snr.dropna()
@@ -131,16 +166,12 @@ def add_products(df,verbose=False):
     if verbose:
         print("Computing TEC...")
 
+    if f"cph1" in df.columns and f"cph2" in df.columns:
+        df=add_tec_columns(df,fs=fs, pair="12")
+    if f"cph1" in df.columns and f"cph3" in df.columns:
+        df=add_tec_columns(df,fs=fs, pair="13")
+
     
-    df=add_tec_columns(df,fs=fs, pair="12")
-    df=add_tec_columns(df,fs=fs, pair="13")
-
-    if ('detrended_cph1' in df.columns) and ('detrended_cph2' in df.columns):
-        df['tec12'] = compute_tec(df['detrended_cph1'], df['detrended_cph2'])
-
-    if ('detrended_cph1' in df.columns) and ('detrended_cph3' in df.columns):
-        df['tec13'] = compute_tec(df['detrended_cph1'], df['detrended_cph3'])
-
     if verbose:
         print("Computing products...")
 
@@ -184,3 +215,5 @@ def add_products(df,verbose=False):
     df = df.merge(products, on=group_cols, how="left")
 
     return df
+
+# %%

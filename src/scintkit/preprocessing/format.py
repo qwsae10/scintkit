@@ -19,7 +19,6 @@ def make_prn(dfin):
 
 
 def zero_cph_snr_to_nan(df):
-    df = df.copy()
     cols = [
         col for col in df.columns
         if (col.startswith("cph") or col.startswith("snr")) and col[3:].isdigit()
@@ -29,7 +28,6 @@ def zero_cph_snr_to_nan(df):
     return df    
                                                                                  
 def temp_formating(df):
-    df= df.copy()
 
     gnssdic_loop = {0: 'GPS', 1: 'SBS', 2: 'GAL', 3: 'BDS', 6: 'GLO'}
     #check if cons is numeric
@@ -48,7 +46,6 @@ def temp_formating(df):
 
 
 def add_sigs(df):
-    df = df.copy()
 
     mapping = {
     # sig1
@@ -78,12 +75,14 @@ def add_sigs(df):
 }
     
     hardcode_sig_dict={
+
         'GPS':{1:'GPS_L1CA',2:'GPS_L2C',3:'GPS_L5'},
         'GLO':{1:'GLO_L1CA',2:'GLO_L2C',3:'GLO_L3'},
-        'GAL':{1:'GAL_L1BC',2:'GAL_E5a',3:'GAL_E5b'},
+        'GAL':{1:'GAL_L1BC',2:'GAL_E5b',3:'GAL_E5b'},
         'BDS':{1:'BDS_B1I',2:'BDS_B2I',3:'BDS_B3I'},
         'QZSS':{1:'QZS_L1CA',2:'QZS_L2C',3:'QZS_L5'}
-        }
+        
+        } #infer signal from scintpi3 dat
 
     if 'sig_1' not in df.columns:
         #scintpi3 doesn't have sig columns, but we can infer them from cons and svid. 

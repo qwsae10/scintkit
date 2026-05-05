@@ -29,7 +29,7 @@ def get_type(f):
     return None
 
 
-def process(flist, verbose=False,end='lvl3'):
+def process(flist, verbose=False,mode='lvl3'):
     """
     Wrapper to run full pipeline on list of files and make high level scintillation index product files (lvl3)
     Inputs:
@@ -91,10 +91,10 @@ def process(flist, verbose=False,end='lvl3'):
         df = add_products(df, verbose=verbose)
         
 
-        if end=='lvl2':
+        if mode=='lvl2':
             df = make_1sec(df)
             outname = str(pq_fname).replace("_lvl0", "_lvl2")
-        if end=='lvl3':
+        if mode=='lvl3':
             df = make_1min(df)
             outname = str(pq_fname).replace("_lvl0", "_lvl3")
 
