@@ -92,9 +92,11 @@ def add_sigs(df):
 
         df['sig_1'] = df['cons'].map(sig1_map)
         df['sig_2'] = df['cons'].map(sig2_map)
+        df['sig_3'] = df['cons'].map(lambda x: hardcode_sig_dict.get(x, {}).get(3))
 
     df['freq_1'] = df['sig_1'].map(lambda x: mapping.get(x, (None, None))[0])
     df['freq_2'] = df['sig_2'].map(lambda x: mapping.get(x, (None, None))[0])
+    df['freq_3'] = df['sig_3'].map(lambda x: mapping.get(x, (None, None))[0])
 
     return df
 

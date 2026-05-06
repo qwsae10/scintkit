@@ -79,7 +79,7 @@ def add_tec_columns(df, pair="13", fs=None):
             )
 
             pseudo, _, n_slip_pseudo = repair_discontinuities_pos(
-                pseudo, fs=fs, threshold=0.1, svid=key, verbose=False
+                pseudo, fs=fs, threshold=1, svid=key, verbose=False
             )
 
 
