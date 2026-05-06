@@ -29,12 +29,12 @@ def pseudorange_tec(P1_m, P2_m, f1_hz, f2_hz):
     return tec_factor * (P2_m - P1_m)/1e16
 
 def add_tec_columns(df, pair="13", fs=None):
+    df = df.reset_index(drop=True).copy()
 
 
 
     def _per_prn(key, g):
-        g = g.copy()
-
+        g=g.copy()
         N1 = pair[0]
         N2 = pair[1]
 
@@ -42,7 +42,6 @@ def add_tec_columns(df, pair="13", fs=None):
         phi2 = g[f"cph{N2}"]
         rng1 = g[f"rng{N1}"]
         rng2 = g[f"rng{N2}"]
-
         # if carrier inputs invalid
         if phi1.isna().all() or phi2.isna().all():
             carrier = np.full(len(g), np.nan)
@@ -91,11 +90,11 @@ def add_tec_columns(df, pair="13", fs=None):
         return g
     out = (
         pd.concat(
-            [_per_prn(key, g) for key, g in df.groupby("prn", sort=False)]
+            [_per_prn(key, g) for key, g in df.groupby("prn", sort=False)], ignore_index=True
         )
     )
 
-    return out.loc[df.index]
+    return out
 
 def compute_s4(snr):
     snr = snr.dropna()
