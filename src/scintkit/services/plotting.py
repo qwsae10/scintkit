@@ -47,13 +47,14 @@ def individual_summary_plot(df,timecol='secbin',elmask=10,n_thresh=0.98):
             ha="left",
             va="top"
         )
-        # elevation on twin axis
+        #elevation on twin axis
         ax1b = ax1.twinx()
         ax1b.plot(g[timecol], g["elev"], color="green", lw=1, alpha=0.7)
 
-        # optional formatting
+        #optional formatting
         ax1b.set_ylabel("Elev (deg)", color="green")
         ax1b.tick_params(axis="y", colors="green")
+
         ax1b.set_ylim(0, 90)
 
         sp_mask1=(
@@ -98,7 +99,7 @@ def individual_summary_plot(df,timecol='secbin',elmask=10,n_thresh=0.98):
         l3, = ax2.plot(g[timecol], g["sigma_phi_1"], color="red", lw=0.8)
         l4, = ax2.plot(g[timecol], g["sigma_phi_2"], color="red", ls="--", lw=0.8)
 
-        ax2.set_ylabel("S4 / σφ")
+        ax2.set_ylabel("$S4 / \sigma_{\phi}$")
         ax2.set_xlabel("UT")
         ax2.set_ylim(0,1)
 

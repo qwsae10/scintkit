@@ -1,5 +1,5 @@
 # scintkit
-[woRK IN PROGRESS]
+[work in progress]
 
 Simple tools for working with ScintPi and GNSS scintillation data.
 
@@ -11,7 +11,8 @@ This repository provides utilities and pipelines for:
 
 - converting raw binary data to Parquet
 - adding derived products (TEC, S4, sigma_phi, etc.)
-- running lightweight processing workflows
+- running processing workflows
+- plotting ScintPi data
 
 ---
 

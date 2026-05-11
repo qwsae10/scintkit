@@ -34,7 +34,7 @@ def add_tec_columns(df, pair="13", fs=None):
 
 
     def _per_prn(key, g):
-        g=g.copy()
+        
         N1 = pair[0]
         N2 = pair[1]
 
