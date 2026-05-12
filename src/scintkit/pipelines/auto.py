@@ -29,13 +29,13 @@ def get_type(f):
     return None
 
 
-def process(flist, verbose=False,mode='lvl3'):
+def process(flist, verbose=False,mode='both'):
     """
     Wrapper to run full pipeline on list of files and make high level scintillation index product files (lvl3)
     Inputs:
     - flist: list of file paths to process. Can be .bin, .bin.zip, or .pq files. Output files will have same relative path but with _lvl3.pq suffix.
     - verbose: if True, print progress messages.
-    - mode: 'lvl2' to make 1 second rate files. 'lvl3' to make 1 minute rate files. Default is 'lvl3'.
+    - mode: 'lvl2' to make 1 second rate files. 'lvl3' to make 1 minute rate files. 'both' to make both. Default is 'both'.
     Outputs:
     - list of output file paths that were created.
 
@@ -95,12 +95,23 @@ def process(flist, verbose=False,mode='lvl3'):
         if mode=='lvl2':
             df = make_1sec(df)
             outname = str(pq_fname).replace("_lvl0", "_lvl2")
+
+            df.to_parquet(outname)
+
         if mode=='lvl3':
             df = make_1min(df)
             outname = str(pq_fname).replace("_lvl0", "_lvl3")
+            df.to_parquet(outname)
+            
+        if mode =='both':
+            df_1min = make_1min(df)
+            outname_1min = str(pq_fname).replace("_lvl0", "_lvl3")
+            df_1min.to_parquet(outname_1min)
+            df_1sec = make_1sec(df)
+            outname_1sec = str(pq_fname).replace("_lvl0", "_lvl2")
+            df_1sec.to_parquet(outname_1sec)
 
 
-        df.to_parquet(outname)
         converted_files.append(outname)
 
         if verbose:
