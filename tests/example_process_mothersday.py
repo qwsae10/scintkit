@@ -22,7 +22,7 @@ if not raw_files:
         "Start Jupyter from the repository root, or update data_dir."
     )
 
-lvl3_files = scintkit.pipelines.auto.process(raw_files, verbose=True,mode='lvl2')
+lvl3_files = scintkit.pipelines.auto.process(raw_files, verbose=True,mode='lvl3')
 
 # %%
 
