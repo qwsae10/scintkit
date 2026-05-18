@@ -9,6 +9,8 @@ tests/data/scintpi3_20241011_0004_96.7572W_32.9920N_v326f.bin.zip
 tests/data/scintpi3_20241011_0004_96.7572W_32.9920N_v326f_lvl3.pq
 tests/data/*lvl2*
 
+
+*bin.zip*
 # python cache
 __pycache__/
 *.py[cod]

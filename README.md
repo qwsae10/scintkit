@@ -1,5 +1,4 @@
 # scintkit
-[work in progress]
 
 Simple tools for working with ScintPi and GNSS scintillation data.
 
@@ -84,7 +83,7 @@ This will:
 See:
 
 ```
-tests/compare_oct11.ipynb
+examples/compare_oct11.ipynb
 ```
 
 This notebook shows how to:
