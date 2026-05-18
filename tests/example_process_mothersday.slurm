@@ -14,3 +14,5 @@ conda activate scintkit
 cd ~/scintkit/tests
 
 python example_process_mothersday_process.py
+
+

@@ -73,48 +73,53 @@ def process(flist, verbose=False,mode='both'):
     
     for fname in flist:
         
-        
+        try:
 
-        if verbose:
-            print(f"Processing {fname}...")
+            if verbose:
+                print(f"Processing {fname}...")
 
-        ext = os.path.splitext(str(fname))[1].lower()
+            ext = os.path.splitext(str(fname))[1].lower()
 
-        # skip conversion if already parquet
-        if ext in [".pq", ".parquet"]:
-            pq_fname = fname
-        else:
-            pq_fname = process_one(fname)
+            # skip conversion if already parquet
+            if ext in [".pq", ".parquet"]:
+                pq_fname = fname
+            else:
+                pq_fname = process_one(fname)
 
-        if verbose:
-            print(f"Reading and formatting parquet file: {pq_fname}...")
-        df = pd.read_parquet(pq_fname)
-        df = add_products(df, verbose=verbose)
-        
-
-        if mode=='lvl2':
-            df = make_1sec(df)
-            outname = str(pq_fname).replace("_lvl0", "_lvl2")
-
-            df.to_parquet(outname)
-
-        if mode=='lvl3':
-            df = make_1min(df)
-            outname = str(pq_fname).replace("_lvl0", "_lvl3")
-            df.to_parquet(outname)
+            if verbose:
+                print(f"Reading and formatting parquet file: {pq_fname}...")
+            df = pd.read_parquet(pq_fname)
+            df = add_products(df, verbose=verbose)
             
-        if mode =='both':
-            df_1min = make_1min(df)
-            outname_1min = str(pq_fname).replace("_lvl0", "_lvl3")
-            df_1min.to_parquet(outname_1min)
-            df_1sec = make_1sec(df)
-            outname_1sec = str(pq_fname).replace("_lvl0", "_lvl2")
-            df_1sec.to_parquet(outname_1sec)
+
+            if mode=='lvl2':
+                df = make_1sec(df)
+                outname = str(pq_fname).replace("_lvl0", "_lvl2")
+
+                df.to_parquet(outname)
+
+            if mode=='lvl3':
+                df = make_1min(df)
+                outname = str(pq_fname).replace("_lvl0", "_lvl3")
+                df.to_parquet(outname)
+                
+            if mode =='both':
+                df_1min = make_1min(df)
+                outname_1min = str(pq_fname).replace("_lvl0", "_lvl3")
+                df_1min.to_parquet(outname_1min)
+                df_1sec = make_1sec(df)
+                outname_1sec = str(pq_fname).replace("_lvl0", "_lvl2")
+                df_1sec.to_parquet(outname_1sec)
 
 
-        converted_files.append(outname)
+            converted_files.append(outname)
 
-        if verbose:
-            print(f"Finished processing {fname}.")
+            if verbose:
+                print(f"Finished processing {fname}.")
 
+
+        except Exception as e:
+            print(f"Error processing {fname}") 
+            print(e)
+            continue
     return converted_files
