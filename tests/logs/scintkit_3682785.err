@@ -1,0 +1,21 @@
+Traceback (most recent call last):
+  File "/home/jxg200016/scintkit/tests/example_process_oct10_11.py", line 25, in <module>
+    lvl3_files = scintkit.pipelines.auto.process(raw_files, verbose=True,mode='lvl3')
+  File "/home/jxg200016/scintkit/src/scintkit/pipelines/auto.py", line 92, in process
+    df = add_products(df, verbose=verbose)
+  File "/home/jxg200016/scintkit/src/scintkit/services/compute.py", line 169, in add_products
+    df=add_tec_columns(df,fs=fs, pair="12")
+  File "/home/jxg200016/scintkit/src/scintkit/services/compute.py", line 93, in add_tec_columns
+    [_per_prn(key, g) for key, g in df.groupby("prn", sort=False)], ignore_index=True
+     ~~~~~~~~^^^^^^^^
+  File "/home/jxg200016/scintkit/src/scintkit/services/compute.py", line 60, in _per_prn
+    carrier, _, n_slip_carrier = repair_discontinuities_pos(
+                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        carrier, fs=fs, threshold=1, svid=key, verbose=True
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/jxg200016/scintkit/src/scintkit/services/phase_detrend.py", line 50, in repair_discontinuities_pos
+    window = int(10 * fs)
+                 ~~~^~~~
+TypeError: unsupported operand type(s) for *: 'int' and 'NoneType'
