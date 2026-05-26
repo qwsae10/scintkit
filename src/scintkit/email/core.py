@@ -5,6 +5,7 @@ import os
 import re
 import h5py as h5
 
+
 def load_targets(csv_path='station_scintpi_codes_fsr.csv'):
     """Loads and sorts station targets strictly from CSV."""
     plot_targets = []
@@ -43,6 +44,7 @@ def load_targets(csv_path='station_scintpi_codes_fsr.csv'):
         return plot_targets
     except Exception as e:
         raise RuntimeError(f"CRITICAL ERROR: CSV not found or invalid ({e}).")
+
 
 def scan_legacy_files(plot_targets, cutoff, base_dir='/mfs/io/groups/uars/scintpi'):
     """Scans ScintPi 2/3 files by distance and version tag."""
@@ -83,6 +85,7 @@ def scan_legacy_files(plot_targets, cutoff, base_dir='/mfs/io/groups/uars/scintp
                 if best_target:
                     best_target['valid_times'].add(time_val.normalize())
 
+
 def scan_sc4_files(plot_targets, cutoff, sc4_dict, base_dir='/mfs/io/groups/uars/scintpi'):
     """Scans ScintPi 4.0 files mapped via explicit dictionary."""
     print("Scanning ScintPi 4 files...")
@@ -108,6 +111,7 @@ def scan_sc4_files(plot_targets, cutoff, sc4_dict, base_dir='/mfs/io/groups/uars
                     if t['code'] == mapped_code:
                         t['valid_times'].add(time_val.normalize())
                         break
+
 
 def checklvl3datamissing(lvl3file, thres=900):
     """Helper: checks percent missing from Level-3 HDF5 file."""

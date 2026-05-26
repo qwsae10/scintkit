@@ -3,22 +3,13 @@
 
 import pandas as pd
 
-try:
-    from .emailer import (
-        load_targets,
-        scan_legacy_files,
-        scan_sc4_files,
-        generate_availability_plot,
-        send_status_email,
-    )
-except ImportError:
-    from emailer import (
-        load_targets,
-        scan_legacy_files,
-        scan_sc4_files,
-        generate_availability_plot,
-        send_status_email,
-    )
+from . import (
+    load_targets,
+    scan_legacy_files,
+    scan_sc4_files,
+    generate_availability_plot,
+    send_status_email,
+)
 
 def main():
     # 1. Initialization

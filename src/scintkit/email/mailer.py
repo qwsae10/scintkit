@@ -10,6 +10,7 @@ SMTP_USER = "use"
 SMTP_PASS = "pass"
 SMTP_SENDER = "use"
 
+
 def send_status_email(image_path, now_date, to_list):
     """Sends the status email using the module-level SMTP credentials."""
 
