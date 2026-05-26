@@ -3,6 +3,7 @@ import matplotlib.dates as mdates
 import matplotlib.patches as mpatches
 import pandas as pd
 
+
 def generate_availability_plot(plot_targets, cutoff, now, output_path):
     """Generates and saves the availability plot."""
     n = len(plot_targets)
