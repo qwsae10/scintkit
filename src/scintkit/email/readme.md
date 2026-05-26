@@ -27,31 +27,15 @@ pip install -e .
 
 This will install `scintkit` and its dependencies (`numpy`, `pandas`, `matplotlib`, `h5py`).
 
-## Security & Environment Variables ⚠️
+## Security & SMTP Credentials ⚠️
 
-**DO NOT hard-code your email passwords into the code.** 
+For now, the email helper uses hardcoded example credentials at the top of the mailer module:
 
-This project uses environment variables to handle SMTP credentials securely. Before running the pipeline, you must set the following environment variables on your system:
+* `SMTP_USER = "use"`
+* `SMTP_PASS = "pass"`
+* `SMTP_SENDER = "use"`
 
-* `SMTP_USER`: The email address you are sending from (e.g., your Gmail).
-* `SMTP_PASS`: Your email password (if using Gmail, this should be an **App Password**, not your main account password).
-* `SMTP_SENDER`: The alias or email address you want to appear in the "From" field.
-
-### Setting variables on Linux/macOS:
-
-export SMTP_USER="your-email@gmail.com"
-export SMTP_PASS="your-app-password"
-export SMTP_SENDER="ScintPi Bot <scintpi-bot@example.com>"
-
-
-### Setting variables on Windows (Command Prompt):
-
-set SMTP_USER=your-email@gmail.com
-set SMTP_PASS=your-app-password
-set SMTP_SENDER=ScintPi Bot <scintpi-bot@example.com>
-
-
-*(Alternatively, you can use a `.env` file and the `python-dotenv` library to load these variables automatically, but ensure `.env` is listed in your `.gitignore`!)*
+Replace those values directly in the code before using this for a real mailbox.
 
 ## Usage
 

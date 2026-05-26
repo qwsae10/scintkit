@@ -1,26 +1,21 @@
-import os
 import smtplib
 import mimetypes
 from email.message import EmailMessage
 from email.utils import make_msgid
 from pathlib import Path
 
-def send_status_email(image_path, now_date, to_list):
-    """Sends the status email using strictly environment variables for auth."""
-    
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_pass = os.environ.get("SMTP_PASS")
-    smtp_sender = os.environ.get("SMTP_SENDER")
+# Example credentials for local testing. Replace these with real values when you
+# are ready to send actual mail.
+SMTP_USER = "use"
+SMTP_PASS = "pass"
+SMTP_SENDER = "use"
 
-    if not all([smtp_user, smtp_pass, smtp_sender]):
-        raise EnvironmentError(
-            "Missing SMTP credentials. You must set SMTP_USER, SMTP_PASS, and SMTP_SENDER "
-            "as environment variables before running the script."
-        )
+def send_status_email(image_path, now_date, to_list):
+    """Sends the status email using the module-level SMTP credentials."""
 
     msg = EmailMessage()
     msg["Subject"] = f"ScintPi Status Update {now_date:%Y-%m-%d}"
-    msg["From"] = smtp_sender
+    msg["From"] = SMTP_SENDER
     msg["To"] = ", ".join(to_list)
     
     msg.set_content("Attached: ScintPi availability summary.")
@@ -43,7 +38,7 @@ def send_status_email(image_path, now_date, to_list):
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as s:
             s.starttls()
-            s.login(smtp_user, smtp_pass)
+            s.login(SMTP_USER, SMTP_PASS)
             s.send_message(msg)
         print("Email sent successfully!")
     except Exception as e:
