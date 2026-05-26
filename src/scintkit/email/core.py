@@ -4,9 +4,20 @@ import glob
 import os
 import re
 import h5py as h5
+from importlib import resources
 
-def load_targets(csv_path='station_scintpi_codes_fsr.csv'):
+
+def _bundled_csv() -> str:
+    """Return the path to the station CSV bundled with this package."""
+    ref = resources.files(__package__).joinpath("station_scintpi_codes_fsr.csv")
+    # as_posix works for both traversable and Path objects
+    return str(ref)
+
+
+def load_targets(csv_path=None):
     """Loads and sorts station targets strictly from CSV."""
+    if csv_path is None:
+        csv_path = _bundled_csv()
     plot_targets = []
     try:
         scintpi_codes = pd.read_csv(csv_path, usecols=[0, 1, 2, 3, 4], encoding='latin1', header=None, skiprows=1)

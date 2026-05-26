@@ -17,6 +17,8 @@ dependencies = [
   "pandas>=2.2,<3",
   "pyarrow>=19,<20",
   "scipy>=1.15,<2",
+  "h5py",
+  "matplotlib",
 ]
 
 
@@ -29,11 +31,15 @@ dev = [
 [tool.setuptools]
 packages = [
   "scintkit",
+  "scintkit.email",
   "scintkit.pipelines",
   "scintkit.preprocessing",
   "scintkit.reading",
   "scintkit.services"
 ]
+
+[tool.setuptools.package-data]
+"scintkit.email" = ["station_scintpi_codes_fsr.csv"]
 
 [tool.setuptools.package-dir]
 scintkit = "src/scintkit"

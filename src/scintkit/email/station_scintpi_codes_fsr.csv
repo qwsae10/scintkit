@@ -1,0 +1,40 @@
+Station Location,Latitude,Longitude,Code,Type
+Iceland,63.774,-20.544,IC-SD1,SC3
+North Dakota,46.907,-96.793,US-ND1,SC3
+New Hampshire,43.703,-72.295,US-NH1,SC3
+Oregon,43.271,-120.358,US-OR1,SC3
+Bear Lake Utah,41.934,-111.421,US-UT2,SC3
+Utah State University Utah,41.742,-111.809,US-UT1,SC3
+Campina Grande Brazil,-7.212,-35.906,BR-CG1,SC4
+Campina Grande Brazil,-7.212,-35.906,BR-CG2,SC4
+Tegucigalpa Honduras,14.087,-87.159,TE-HO2,SC2
+Tegucigalpa Honduras,14.087,-87.159,TE-HO1,SC4
+Cartago Costa Rica,9.855,-83.913,CR-CA2,SC3
+Cartago Costa Rica,9.855,-83.913,CR-CA1,SC4
+Morelia Mexico,19.649,-101.222,ME-MO1,SC4
+Morelia Mexico,19.649,-101.222,ME-MO2,SC4
+Pennsylvania,41.406,-75.658,US-PA1,SC3
+Illinois,40.167,-88.159,US-IL1,SC3
+Missouri,38.919,-92.128,US-MO1,SC3
+Colorado,38.382,-103.155,US-CO1,SC3
+Kentucky,36.875,-86.402,US-KY1,SC3
+New Mexico,34.353,-106.885,US-NM1,SC3
+Dallas Texas,32.992,-96.757,US-TX1,SC3
+Florida,29.188,-81.048,US-FL1,SC3
+Taiwan,24.972,121.192,TW-CU1,SC3
+Quebradillas Puerto Rico,18.47,-66.91,US-PR2,SC3
+Arecibo Puerto Rico,18.35,-66.75,US-PR3,SC3
+Culebra Puerto Rico,18.33,-65.307,US-PR1,SC3
+Tegucigalpa Honduras,14.091,-87.16,TE-HO3,SC3
+Piura Peru,-5.171,-80.638,PE-PI1,SC3
+Piura Peru,-5.171,-80.639,PE-PI2,SC2
+Jicamarca Peru,-11.952,-76.876,PE-JI2,SC2
+Jicamarca Peru,-11.952,-76.876,PE-JI1,SC3
+Jicamarca Peru,-11.95233,-76.8758,PE-JI3,SC2
+Santa Maria Brazil,-29.683,-53.87,BR-RS1,SC3
+South Africa,-34.424,19.224,SA-SA1,SC3
+University of Calcutta India,22.937,88.51,IN-CA1,SC3
+Tucuman Argentina,-26.817,-65.199,AR-TU1,SC3
+Federal Capital Territory Nigeria,8.966,7.381,NG-FCT1,SC3
+Sao Paolo Brazil,-22.12,-51.408,BR-SP1,SC3
+Dallas Texas (JM House),32.945,-96.716,US-TX2,SC3
