@@ -97,22 +97,26 @@ def process(flist, verbose=False,mode='both'):
                 outname = str(pq_fname).replace("_lvl0", "_lvl2")
 
                 df.to_parquet(outname)
+                converted_files.append(outname)
+
 
             if mode=='lvl3':
                 df = make_1min(df)
                 outname = str(pq_fname).replace("_lvl0", "_lvl3")
                 df.to_parquet(outname)
-                
+                converted_files.append(outname)
+
             if mode =='both':
                 df_1min = make_1min(df)
                 outname_1min = str(pq_fname).replace("_lvl0", "_lvl3")
                 df_1min.to_parquet(outname_1min)
+                converted_files.append(outname_1min)
                 df_1sec = make_1sec(df)
                 outname_1sec = str(pq_fname).replace("_lvl0", "_lvl2")
                 df_1sec.to_parquet(outname_1sec)
+                converted_files.append(outname_1sec)
 
 
-            converted_files.append(outname)
 
             if verbose:
                 print(f"Finished processing {fname}.")
@@ -123,3 +127,48 @@ def process(flist, verbose=False,mode='both'):
             print(e)
             continue
     return converted_files
+
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
+from pathlib import Path
+import numpy as np
+
+
+def split_list(items, n):
+    items = list(items)
+    if n <= 1:
+        return [items]
+    return [chunk.tolist() for chunk in np.array_split(items, n) if len(chunk) > 0]
+
+
+def process_parallel(flist, n_workers=4, verbose=False, mode="both"):
+    """
+    Run process() in parallel by splitting flist across n workers.
+    """
+
+    if flist is None:
+        flist = []
+    elif isinstance(flist, (str, os.PathLike)):
+        flist = [flist]
+    else:
+        flist = list(flist)
+
+    chunks = split_list(flist, n_workers)
+
+    all_outputs = []
+
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        futures = [
+            executor.submit(process, chunk, verbose, mode)
+            for chunk in chunks
+        ]
+
+        for future in as_completed(futures):
+            try:
+                outputs = future.result()
+                all_outputs.extend(outputs)
+            except Exception as e:
+                print(f"Worker failed: {e}")
+
+    return all_outputs
+

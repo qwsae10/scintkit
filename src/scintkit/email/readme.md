@@ -30,7 +30,7 @@ pip install -e .
 
 This will install `scintkit` and all of its dependencies (`numpy`, `pandas`, `matplotlib`, `h5py`, etc.).
 
-## Security & Environment Variables ⚠️
+## Security & SMTP Credentials ⚠️
 
 **DO NOT hard-code your email passwords into the code.** 
 
