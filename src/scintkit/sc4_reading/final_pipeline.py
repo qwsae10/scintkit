@@ -1,10 +1,12 @@
 from pathlib import Path
+
 import pandas as pd
-from bin_to_parquet import run_pipeline
 from add_elevaz_pipeline import run_sp3_pipeline
-from lvl3_pipeline import run_lvl3_pipeline
+from bin_to_parquet import run_pipeline
 from concat_4hr_files import merge_4hr_parquet
+from lvl3_pipeline import run_lvl3_pipeline
 from SP3_download_func import download_sp3_files
+
 
 def get_input():
     """Get user input."""
@@ -49,7 +51,7 @@ def main():
     txt_dir = binary_dir / "txt"
     mearem_dir = binary_dir / "mearem"
     lvl0_dir = binary_dir / "lvl0_noelev"
-    lvl0_dir_welev= binary_dir / "lvl0_welev"
+    lvl0_dir_welev = binary_dir / "lvl0_welev"
     concat_lvl0 = binary_dir / "concat_lvl0"
     lvl3_dir = binary_dir / "concat_lvl3"
     lvl2_dir = binary_dir / "concat_lvl2"
@@ -57,15 +59,14 @@ def main():
 
     print(f"\nBinary directory: {binary_dir}")
 
-    # Binary -> TXT -> Mearem -> Level-0 
-    run_pipeline( 
+    # Binary -> TXT -> Mearem -> Level-0
+    run_pipeline(
         binary_dir=binary_dir,
         txt_dir=txt_dir,
         mearem_dir=mearem_dir,
         lvl0_dir=lvl0_dir,
     )
     print("Binary to Parquet pipeline completed.")
-
 
     # Check if elevation/azimuth already exist
     if has_elevation_azimuth(lvl0_dir):
@@ -97,7 +98,9 @@ def main():
         lvl0_input = lvl0_dir_welev
 
     merge_4hr_parquet(
-        lvl0_input, concat_lvl0,)
+        lvl0_input,
+        concat_lvl0,
+    )
     # Level-3 pipeline
     run_lvl3_pipeline(
         lvl0_dir=concat_lvl0,

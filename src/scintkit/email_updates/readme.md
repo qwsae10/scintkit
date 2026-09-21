@@ -78,7 +78,11 @@ and loaded automatically, so installed code does not depend on a repository
 path:
 
 ```python
-from scintkit.email_updates import load_targets, scan_legacy_files, generate_availability_plot
+from scintkit.email_updates import (
+    load_targets,
+    scan_legacy_files,
+    generate_availability_plot,
+)
 
 # Loads the bundled CSV automatically
 targets = load_targets()

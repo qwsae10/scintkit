@@ -19,15 +19,15 @@ python batch_ml_features.py \
 from __future__ import annotations
 
 import argparse
+import math
+import os
+import re
+import traceback
 from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
-import math
-import os
 from pathlib import Path
-import re
 from time import perf_counter
-import traceback
 
 import pyarrow.parquet as pq
 
@@ -119,8 +119,7 @@ def parse_year_argument(value: str) -> tuple[int, ...]:
     tokens = [token.strip() for token in value.split(",")]
     if not tokens or any(not token for token in tokens):
         raise argparse.ArgumentTypeError(
-            "year must be one year or a comma-separated list, such as "
-            "2024,2025,2026"
+            "year must be one year or a comma-separated list, such as 2024,2025,2026"
         )
     try:
         years = tuple(int(token) for token in tokens)
@@ -247,9 +246,7 @@ def _validate_unique_outputs(outputs: dict[Path, Path]) -> None:
     by_name: dict[str, list[Path]] = {}
     for source, output in outputs.items():
         by_name.setdefault(output.name, []).append(source)
-    collisions = {
-        name: paths for name, paths in by_name.items() if len(paths) > 1
-    }
+    collisions = {name: paths for name, paths in by_name.items() if len(paths) > 1}
     if collisions:
         details = "; ".join(
             f"{name}: {', '.join(str(path) for path in paths)}"
@@ -286,9 +283,7 @@ def _write_error_diagnostic(
 ) -> None:
     diagnostic_path = error_path_for(output)
     diagnostic_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = diagnostic_path.with_name(
-        f".{diagnostic_path.name}.{os.getpid()}.tmp"
-    )
+    temporary = diagnostic_path.with_name(f".{diagnostic_path.name}.{os.getpid()}.tmp")
     diagnostic = (
         f"Source: {source}\n"
         f"Output: {output}\n"
@@ -423,8 +418,7 @@ def run_batch(
 
     print(f"Matching source files: {len(all_sources):,}")
     print(
-        f"File shard: {shard_index + 1}/{shard_count} "
-        f"({len(sources):,} files assigned)"
+        f"File shard: {shard_index + 1}/{shard_count} ({len(sources):,} files assigned)"
     )
     print(f"Workers: {workers}")
     print(f"Years: {','.join(str(value) for value in years)}")

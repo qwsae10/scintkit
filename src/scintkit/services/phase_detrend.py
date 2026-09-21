@@ -1,33 +1,30 @@
-#%%%
+# %%%
 import numpy as np
 import pandas as pd
-from scipy import signal    
+from scipy import signal
+
 
 def detect_sampling_rate(df):
     """
     detect the sampling rate of the data by looking at the number of samples per minute per PRN.
     """
     # samples per (minute, prn)
-    counts = (
-        df
-        .groupby(['minbin', 'prn'])
-        .size()
-        .reset_index(name='n_samples')
-    )
+    counts = df.groupby(["minbin", "prn"]).size().reset_index(name="n_samples")
 
     n = counts.n_samples.max()
 
     threshold = 10
-    if abs(n-600) < threshold:
-        return 600/60
-    elif abs(n-1200) < threshold:
-        return 1200/60
-    elif abs(n-2400) < threshold:
-        return 2400/60
-    elif abs(n-3000) < threshold:
-        return 3000/60
+    if abs(n - 600) < threshold:
+        return 600 / 60
+    elif abs(n - 1200) < threshold:
+        return 1200 / 60
+    elif abs(n - 2400) < threshold:
+        return 2400 / 60
+    elif abs(n - 3000) < threshold:
+        return 3000 / 60
     else:
         return None
+
 
 def make_prn_local(dfin):
     constellation_map = {
@@ -40,10 +37,12 @@ def make_prn_local(dfin):
         "SBAS": "S",
         "SBS": "S",
     }
-    return dfin["SIG"].map(constellation_map) + dfin["SVID"].astype(int).astype(str).str.zfill(2)
+    return dfin["SIG"].map(constellation_map) + dfin["SVID"].astype(int).astype(
+        str
+    ).str.zfill(2)
 
 
-def repair_discontinuities_pos(vec, fs, threshold=1,svid=None,verbose=False):
+def repair_discontinuities_pos(vec, fs, threshold=1, svid=None, verbose=False):
     y = pd.Series(vec).copy()
 
     finite = y.notna().to_numpy()
@@ -55,8 +54,7 @@ def repair_discontinuities_pos(vec, fs, threshold=1,svid=None,verbose=False):
     delt = y.diff()
 
     trend = (
-        delt
-        .rolling(window=window, center=True, min_periods=max(3, window // 10))
+        delt.rolling(window=window, center=True, min_periods=max(3, window // 10))
         .median()
         .bfill()
         .ffill()
@@ -68,11 +66,11 @@ def repair_discontinuities_pos(vec, fs, threshold=1,svid=None,verbose=False):
     good = residual.le(threshold) | residual.isna()
     slip_mask = ~good
     n_slips = int(slip_mask.sum())
- 
-    if n_slips/len(vec) > 0.2 and len(vec) > 10:
+
+    if n_slips / len(vec) > 0.2 and len(vec) > 10:
         if verbose:
             print(f"many cycle slips detected for SVID {svid}, {n_slips}/{len(vec)}.")
-    
+
         return pd.Series(vec), slip_mask, n_slips
     delt_clean = delt.where(good, np.nan)
 
@@ -87,57 +85,50 @@ def repair_discontinuities_pos(vec, fs, threshold=1,svid=None,verbose=False):
     for start, stop in zip(starts, stops):
         result.iloc[start] = y.iloc[start]
         if start + 1 < stop:
-            increments = delt_clean.iloc[start + 1:stop].interpolate(
-                limit_direction="both"
-            ).fillna(0.0)
-            result.iloc[start + 1:stop] = (
+            increments = (
+                delt_clean.iloc[start + 1 : stop]
+                .interpolate(limit_direction="both")
+                .fillna(0.0)
+            )
+            result.iloc[start + 1 : stop] = (
                 y.iloc[start] + increments.cumsum()
             ).to_numpy()
 
     return result, slip_mask, n_slips
 
+
 def filter_signal_cascaded(x, f_N=0.1, fs=10):
-        # To do: design a non-causal filter 
-        omega_N = 2 * np.pi * f_N
-        l = 3
+    # To do: design a non-causal filter
+    omega_N = 2 * np.pi * f_N
+    l = 3
 
-        a1 = np.sqrt(2 + np.sqrt(l))
-        a2 = np.sqrt(2)
-        a3 = np.sqrt(2 - np.sqrt(l))
+    a1 = np.sqrt(2 + np.sqrt(l))
+    a2 = np.sqrt(2)
+    a3 = np.sqrt(2 - np.sqrt(l))
 
-        num = [1, 0, 0]
-        den1 = [1, a1 * omega_N, omega_N**2]
-        den2 = [1, a2 * omega_N, omega_N**2]
-        den3 = [1, a3 * omega_N, omega_N**2]
+    num = [1, 0, 0]
+    den1 = [1, a1 * omega_N, omega_N**2]
+    den2 = [1, a2 * omega_N, omega_N**2]
+    den3 = [1, a3 * omega_N, omega_N**2]
 
-        bz1, az1 = signal.bilinear(num, den1, fs)
-        bz2, az2 = signal.bilinear(num, den2, fs)
-        bz3, az3 = signal.bilinear(num, den3, fs)
+    bz1, az1 = signal.bilinear(num, den1, fs)
+    bz2, az2 = signal.bilinear(num, den2, fs)
+    bz3, az3 = signal.bilinear(num, den3, fs)
 
-        y_stage1 = signal.lfilter(bz1, az1, x)
-        y_stage2 = signal.lfilter(bz2, az2, y_stage1)
-        y_stage3 = signal.lfilter(bz3, az3, y_stage2)
+    y_stage1 = signal.lfilter(bz1, az1, x)
+    y_stage2 = signal.lfilter(bz2, az2, y_stage1)
+    y_stage3 = signal.lfilter(bz3, az3, y_stage2)
 
-        return y_stage3
-
-
+    return y_stage3
 
 
-def highpass_phase(
-    df,
-    in_col="cph1",
-    out_col="detrended_cph1",
-    tr=1,
-    fs=None,
-    f_N=0.1
-):
+def highpass_phase(df, in_col="cph1", out_col="detrended_cph1", tr=1, fs=None, f_N=0.1):
 
     slip_col = out_col.replace("detrended", "cycleslips")
     df[out_col] = np.nan
     df[slip_col] = False
     mask_col = out_col.replace("detrended", "edgegap_mask")
     df[mask_col] = False
-
 
     if fs is None:
         fs = detect_sampling_rate(df)
@@ -158,12 +149,8 @@ def highpass_phase(
             phase_s = pd.Series(phase)
             phase_s = phase_s.interpolate(limit_direction="both")
 
-
             repaired, cycleslips, _ = repair_discontinuities_pos(
-                phase_s * 2 * np.pi,
-                fs=fs,
-                threshold=tr,
-                svid=prn
+                phase_s * 2 * np.pi, fs=fs, threshold=tr, svid=prn
             )
 
             slip_mask = cycleslips.to_numpy(dtype=bool)
@@ -190,7 +177,6 @@ def highpass_phase(
             df.iloc[pos, df.columns.get_loc(out_col)] = filtered
             df.iloc[pos, df.columns.get_loc(slip_col)] = slip_mask
             df.iloc[pos, df.columns.get_loc(mask_col)] = edge_gap_mask
-            
 
         except Exception as exc:
             print(f"highpass_phase failed for PRN {prn}: {type(exc).__name__}: {exc}")
@@ -200,7 +186,6 @@ def highpass_phase(
             raise
 
     return df
-
 
 
 def make_edge_gap_mask(time, phase, fs, gap_seconds=1, pad_seconds=180):
@@ -230,8 +215,9 @@ def make_edge_gap_mask(time, phase, fs, gap_seconds=1, pad_seconds=180):
 
     return mask
 
-def highpass_all_phases(df,fs=None,tr=1):
-    #wrapper to add detrended phases for all available phase columns
+
+def highpass_all_phases(df, fs=None, tr=1):
+    # wrapper to add detrended phases for all available phase columns
     for i in range(1, 4):
         if f"cph{i}" not in df.columns:
             continue
@@ -239,7 +225,11 @@ def highpass_all_phases(df,fs=None,tr=1):
         out_col = f"detrended_cph{i}"
         frequency_col = f"freq_{i}"
 
-        scaled_tr = tr*df[frequency_col].median()/1575.42 if frequency_col in df.columns else tr
+        scaled_tr = (
+            tr * df[frequency_col].median() / 1575.42
+            if frequency_col in df.columns
+            else tr
+        )
 
         df = highpass_phase(df, in_col=in_col, out_col=out_col, tr=scaled_tr, fs=fs)
     return df
@@ -266,10 +256,7 @@ def estimate_clock(df, elev_mask=10):
     clock_df = df[(df["elev"] > elev_mask) & (df["elev"] < 90)]
 
     median_curve = (
-        clock_df.melt(
-            id_vars="datetime",
-            value_vars=value_cols
-        )
+        clock_df.melt(id_vars="datetime", value_vars=value_cols)
         .groupby("datetime")["value"]
         .median()
     )
@@ -279,25 +266,31 @@ def estimate_clock(df, elev_mask=10):
 
     return df
 
-def clock_correction(df,out_col="detrended_noclk_cph"):
+
+def clock_correction(df, out_col="detrended_noclk_cph"):
 
     for i in [1, 2, 3]:
         cph_col = f"detrended_cph{i}"
-        out_coli = out_col+f"{i}"
-        
-        if cph_col in df.columns and "clock_term" in df.columns and f"freq_{i}" in df.columns:
+        out_coli = out_col + f"{i}"
+
+        if (
+            cph_col in df.columns
+            and "clock_term" in df.columns
+            and f"freq_{i}" in df.columns
+        ):
             df[out_coli] = df[cph_col] - df["clock_term"] * df[f"freq_{i}"]
 
     return df
 
 
-def process_phases(df,fs=None,tr=1):
-    fs=detect_sampling_rate(df) if fs is None else fs
+def process_phases(df, fs=None, tr=1):
+    fs = detect_sampling_rate(df) if fs is None else fs
 
-    df = highpass_all_phases(df,fs,tr)
+    df = highpass_all_phases(df, fs, tr)
     df = estimate_clock(df)
     df = clock_correction(df)
 
     return df
+
 
 # %%

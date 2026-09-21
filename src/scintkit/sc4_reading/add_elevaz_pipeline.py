@@ -1,6 +1,6 @@
 from pathlib import Path
-import pandas as pd
 
+import pandas as pd
 from add_elevaz import sp3_merge_lvl3
 
 
@@ -27,7 +27,6 @@ def run_sp3_pipeline(
     failed = []
 
     for i, parquet_file in enumerate(parquet_files, start=1):
-
         print("=" * 80)
         print(f"[{i}/{len(parquet_files)}] {parquet_file.name}")
 
@@ -46,26 +45,17 @@ def run_sp3_pipeline(
             continue
 
         try:
-
-            df = pd.read_parquet(
-                parquet_file,
-                columns=["timestamp"]
-            )
+            df = pd.read_parquet(parquet_file, columns=["timestamp"])
 
             first_time = pd.to_datetime(df["timestamp"].iloc[0])
 
             year = first_time.year
             doy = first_time.dayofyear
 
-            sp3_file = (
-                sp3_dir /
-                f"IAC0MGXFIN_{year}{doy:03d}0000_01D_05M_ORB.SP3"
-            )
+            sp3_file = sp3_dir / f"IAC0MGXFIN_{year}{doy:03d}0000_01D_05M_ORB.SP3"
 
             if not sp3_file.exists():
-                raise FileNotFoundError(
-                    f"SP3 file not found:\n{sp3_file}"
-                )
+                raise FileNotFoundError(f"SP3 file not found:\n{sp3_file}")
 
             print(f"Using SP3 : {sp3_file.name}")
 
@@ -80,7 +70,6 @@ def run_sp3_pipeline(
             success += 1
 
         except Exception as e:
-
             print("✗ Failed")
             print(e)
 
@@ -98,4 +87,3 @@ def run_sp3_pipeline(
 
         for file in failed:
             print(file)
-

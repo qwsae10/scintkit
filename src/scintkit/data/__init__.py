@@ -7,7 +7,6 @@ from importlib import resources
 import numpy as np
 import pandas as pd
 
-
 _FILENAME_COORDINATES = re.compile(
     r"_([0-9]+(?:\.[0-9]+)?)([EW])_([0-9]+(?:\.[0-9]+)?)([NS])",
     re.IGNORECASE,
@@ -16,14 +15,14 @@ _FILENAME_COORDINATES = re.compile(
 
 def load_station_codes() -> pd.DataFrame:
     """Load the maintained ScintPi station registry bundled with ScintKit."""
-    csv_resource = resources.files(__package__).joinpath(
-        "station_scintpi_codes.csv"
-    )
+    csv_resource = resources.files(__package__).joinpath("station_scintpi_codes.csv")
     with csv_resource.open("r", encoding="latin1", newline="") as csv_file:
         return pd.read_csv(csv_file)
 
 
-def _coordinates_from_filename(filename: str | os.PathLike) -> tuple[float, float] | None:
+def _coordinates_from_filename(
+    filename: str | os.PathLike,
+) -> tuple[float, float] | None:
     match = _FILENAME_COORDINATES.search(os.fspath(filename))
     if match is None:
         return None
@@ -95,9 +94,7 @@ def _nearest_station(
     nearest = stations[np.isclose(distances, minimum_distance)]
     if len(nearest) > 1:
         codes = ", ".join(nearest["Code"].astype(str))
-        raise ValueError(
-            "coordinates match multiple station entries equally: " + codes
-        )
+        raise ValueError("coordinates match multiple station entries equally: " + codes)
 
     return _station_dict(nearest.iloc[0])
 
@@ -148,9 +145,7 @@ def identify_station(
         version_match = re.search(r"scintpi[_-]?([234])", basename)
         if version_match:
             version = f"SC{version_match.group(1)}"
-            stations = stations[
-                stations["Type"].astype(str).str.upper() == version
-            ]
+            stations = stations[stations["Type"].astype(str).str.upper() == version]
 
     return _nearest_station(
         stations,

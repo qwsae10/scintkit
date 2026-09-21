@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-import scintkit.services.compute as compute
+from scintkit.services import compute
 
 
 def _minute(prn, minute, phase_count, snr_count, edge_gap=False):
@@ -42,30 +42,65 @@ def test_add_products_creates_separate_sigma_phi_and_s4_quality_flags(monkeypatc
     result = compute.add_products(frame)
     minute_products = result.groupby(["prn", "minbin"], sort=False).first()
 
-    assert minute_products.loc[("G01", pd.Timestamp("2024-01-01 00:00")),
-                               "sigma_phi_quality_flag_1"] == 0
-    assert minute_products.loc[("G01", pd.Timestamp("2024-01-01 00:00")),
-                               "s4_quality_flag_1"] == 0
+    assert (
+        minute_products.loc[
+            ("G01", pd.Timestamp("2024-01-01 00:00")), "sigma_phi_quality_flag_1"
+        ]
+        == 0
+    )
+    assert (
+        minute_products.loc[
+            ("G01", pd.Timestamp("2024-01-01 00:00")), "s4_quality_flag_1"
+        ]
+        == 0
+    )
 
-    assert minute_products.loc[("G01", pd.Timestamp("2024-01-01 00:01")),
-                               "sigma_phi_quality_flag_1"] == 1
-    assert minute_products.loc[("G01", pd.Timestamp("2024-01-01 00:01")),
-                               "s4_quality_flag_1"] == 1
+    assert (
+        minute_products.loc[
+            ("G01", pd.Timestamp("2024-01-01 00:01")), "sigma_phi_quality_flag_1"
+        ]
+        == 1
+    )
+    assert (
+        minute_products.loc[
+            ("G01", pd.Timestamp("2024-01-01 00:01")), "s4_quality_flag_1"
+        ]
+        == 1
+    )
 
-    assert minute_products.loc[("G02", pd.Timestamp("2024-01-01 00:00")),
-                               "sigma_phi_quality_flag_1"] == 1
-    assert minute_products.loc[("G02", pd.Timestamp("2024-01-01 00:00")),
-                               "s4_quality_flag_1"] == 0
+    assert (
+        minute_products.loc[
+            ("G02", pd.Timestamp("2024-01-01 00:00")), "sigma_phi_quality_flag_1"
+        ]
+        == 1
+    )
+    assert (
+        minute_products.loc[
+            ("G02", pd.Timestamp("2024-01-01 00:00")), "s4_quality_flag_1"
+        ]
+        == 0
+    )
 
-    assert minute_products.loc[("R03", pd.Timestamp("2024-01-01 00:00")),
-                               "sigma_phi_quality_flag_1"] == 1
-    assert minute_products.loc[("R03", pd.Timestamp("2024-01-01 00:00")),
-                               "s4_quality_flag_1"] == 0
+    assert (
+        minute_products.loc[
+            ("R03", pd.Timestamp("2024-01-01 00:00")), "sigma_phi_quality_flag_1"
+        ]
+        == 1
+    )
+    assert (
+        minute_products.loc[
+            ("R03", pd.Timestamp("2024-01-01 00:00")), "s4_quality_flag_1"
+        ]
+        == 0
+    )
 
-    assert minute_products.loc[("G01", pd.Timestamp("2024-01-01 00:00")),
-                               "n_sigphi_1"] == 590
-    assert minute_products.loc[("G01", pd.Timestamp("2024-01-01 00:00")),
-                               "n_s4_1"] == 480
+    assert (
+        minute_products.loc[("G01", pd.Timestamp("2024-01-01 00:00")), "n_sigphi_1"]
+        == 590
+    )
+    assert (
+        minute_products.loc[("G01", pd.Timestamp("2024-01-01 00:00")), "n_s4_1"] == 480
+    )
     assert "n_1" not in result.columns
     assert "_s4_sample_count_1" not in result.columns
     assert "quality_1" not in result.columns
@@ -80,9 +115,7 @@ def test_channel_2_edge_gap_mask_sets_channel_2_sigma_phi_flag(monkeypatch):
             "detrended_noclk_cph1": np.ones(n_rows),
             "detrended_noclk_cph2": np.ones(n_rows),
             "edgegap_mask_cph1": np.zeros(n_rows, dtype=bool),
-            "edgegap_mask_cph2": np.r_[
-                True, np.zeros(n_rows - 1, dtype=bool)
-            ],
+            "edgegap_mask_cph2": np.r_[True, np.zeros(n_rows - 1, dtype=bool)],
         }
     )
 

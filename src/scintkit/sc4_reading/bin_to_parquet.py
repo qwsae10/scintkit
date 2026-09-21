@@ -1,11 +1,10 @@
-from pathlib import Path
 import shutil
 import traceback
+from pathlib import Path
 
+from parquet_reshaping_lvl0 import pq_reshaping_lvl0
 from sc4_reading_func import binary_to_clean_txt
 from sc4_s02_txtF2parquet import reading__measurements_file
-from parquet_reshaping_lvl0 import pq_reshaping_lvl0
-import time
 
 
 def run_pipeline(
@@ -57,59 +56,43 @@ def run_pipeline(
     failed = []
 
     for i, binary_file in enumerate(binary_files, start=1):
-
         print("=" * 80)
         print(f"[{i}/{len(binary_files)}] {binary_file.name}")
-        
+
         lvl0_file = lvl0_dir / f"{binary_file.name}_mearem_noelev_lvl0.parquet"
 
         if lvl0_file.exists():
-            print(f"Level0 already exists:")
+            print("Level0 already exists:")
             print(lvl0_file)
             print("Skipping...")
             successful += 1
             continue
 
         try:
-
-
-            txt_file = binary_to_clean_txt(
-                binary_file,
-                output_dir=txt_dir
-            )
+            txt_file = binary_to_clean_txt(binary_file, output_dir=txt_dir)
 
             txt_file = Path(txt_file)
 
-            print(f"TXT created:")
+            print("TXT created:")
             print(txt_file)
 
-
-            mearem_df, mearem_file = reading__measurements_file(
-                str(txt_file)
-            )
+            mearem_df, mearem_file = reading__measurements_file(str(txt_file))
 
             mearem_file = Path(mearem_file)
 
             destination = mearem_dir / mearem_file.name
 
             if mearem_file != destination:
-
-                shutil.move(
-                    str(mearem_file),
-                    str(destination)
-                )
+                shutil.move(str(mearem_file), str(destination))
 
                 mearem_file = destination
 
-            print(f"Measurement parquet:")
+            print("Measurement parquet:")
             print(mearem_file)
 
-            lvl0_df, lvl0_file = pq_reshaping_lvl0(
-                mearem_file,
-                output_dir=lvl0_dir
-            )
+            lvl0_df, lvl0_file = pq_reshaping_lvl0(mearem_file, output_dir=lvl0_dir)
 
-            print(f"Level0 parquet:")
+            print("Level0 parquet:")
             print(lvl0_file)
 
             successful += 1
@@ -117,7 +100,6 @@ def run_pipeline(
             print("✓ Success")
 
         except Exception as e:
-
             failed.append(binary_file.name)
 
             print("✗ Failed")
@@ -132,11 +114,7 @@ def run_pipeline(
     print(f"Failed     : {len(failed)}")
 
     if failed:
-
         print("\nFailed files:")
 
         for file in failed:
-
             print(file)
- 
-   

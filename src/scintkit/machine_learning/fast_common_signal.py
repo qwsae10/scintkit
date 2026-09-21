@@ -61,9 +61,8 @@ def receiver_epoch_ids_fast(
     raw_time = frame[time_column].to_numpy(dtype="datetime64[ns]").astype("int64")
     boundary = np.empty(len(frame), dtype=bool)
     boundary[0] = True
-    boundary[1:] = (
-        (raw_time[1:] != raw_time[:-1])
-        | (occurrence_level[1:] > occurrence_level[:-1])
+    boundary[1:] = (raw_time[1:] != raw_time[:-1]) | (
+        occurrence_level[1:] > occurrence_level[:-1]
     )
     return np.cumsum(boundary, dtype="int32") - 1
 
@@ -148,4 +147,3 @@ def estimate_clock_fast(
     if keep_epoch_id:
         frame["receiver_epoch"] = epoch_ids
     return frame
-

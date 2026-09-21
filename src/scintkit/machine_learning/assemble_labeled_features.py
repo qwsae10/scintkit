@@ -90,14 +90,10 @@ def select_and_label(frame: pd.DataFrame, source_path: Path) -> pd.DataFrame:
     coordinate = coordinates_from_filename(source_path)
 
     if is_site(coordinate, SCINTILLATION_SITE):
-        utc = pd.to_datetime(
-            clean["minute_timestamp_utc"], errors="raise", utc=True
-        )
+        utc = pd.to_datetime(clean["minute_timestamp_utc"], errors="raise", utc=True)
         local_hour = utc.dt.tz_convert(SCINTILLATION_TIMEZONE).dt.hour
         selected = (
-            elevation.gt(40)
-            & s4.gt(S4_MIN)
-            & (local_hour.gt(18) | local_hour.lt(4))
+            elevation.gt(40) & s4.gt(S4_MIN) & (local_hour.gt(18) | local_hour.lt(4))
         )
         label = "Scintillation"
     elif is_site(coordinate, RFI_SITE):

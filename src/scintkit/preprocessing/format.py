@@ -1,7 +1,4 @@
-
 import pandas as pd
-import numpy as np
-
 
 CONSTELLATION_PREFIX = {
     "GPS": "G",
@@ -55,29 +52,28 @@ FREQUENCY_MHZ_BY_SIGNAL = {
 def make_prn(dfin):
     # Mapping the small set of unique SVIDs avoids invoking Python once per
     # row on multi-million-row receiver files.
-    svid_labels = {
-        value: str(int(value)).zfill(2)
-        for value in dfin["svid"].unique()
-    }
+    svid_labels = {value: str(int(value)).zfill(2) for value in dfin["svid"].unique()}
     return dfin["cons"].map(CONSTELLATION_PREFIX) + dfin["svid"].map(svid_labels)
 
 
 def zero_cph_snr_to_nan(df):
     cols = [
-        col for col in df.columns
+        col
+        for col in df.columns
         if (col.startswith("cph") or col.startswith("snr")) and col[3:].isdigit()
     ]
     for column in cols:
         df[column] = df[column].mask(df[column].eq(0))
-    return df    
-                                                                                 
+    return df
+
+
 def temp_formating(df):
-    #check if cons is numeric
-    s = pd.to_numeric(df['cons'], errors='coerce')
+    # check if cons is numeric
+    s = pd.to_numeric(df["cons"], errors="coerce")
 
     if s.notna().all():
-        df['cons'] = s.map(NUMERIC_CONSTELLATION)
-    invalid_glonass = (df['cons'] == 'GLO') & (df['svid'] == 255)
+        df["cons"] = s.map(NUMERIC_CONSTELLATION)
+    invalid_glonass = (df["cons"] == "GLO") & (df["svid"] == 255)
     if invalid_glonass.any():
         df = df.loc[~invalid_glonass].copy()
 
@@ -85,26 +81,26 @@ def temp_formating(df):
         pd.RangeIndex(len(df))
     ):
         df = df.reset_index(drop=True)
-    df['minbin'] = df['datetime'].dt.floor('1min')
-    df['prn']=make_prn(df)
-    df=add_sigs(df)
-    df=zero_cph_snr_to_nan(df)
+    df["minbin"] = df["datetime"].dt.floor("1min")
+    df["prn"] = make_prn(df)
+    df = add_sigs(df)
+    df = zero_cph_snr_to_nan(df)
     return df
 
 
 def add_sigs(df):
-    if 'sig_1' not in df.columns:
-        #scintpi3 doesn't have sig columns, but we can infer them from cons and svid. 
-        #hardcoded for now, but could be made more flexible if needed
+    if "sig_1" not in df.columns:
+        # scintpi3 doesn't have sig columns, but we can infer them from cons and svid.
+        # hardcoded for now, but could be made more flexible if needed
         for signal_number in (1, 2, 3):
             signal_map = {
                 constellation: signals[signal_number - 1]
                 for constellation, signals in SIGNALS_BY_CONSTELLATION.items()
             }
-            df[f'sig_{signal_number}'] = df['cons'].map(signal_map)
+            df[f"sig_{signal_number}"] = df["cons"].map(signal_map)
 
     for signal_number in (1, 2, 3):
-        df[f'freq_{signal_number}'] = df[f'sig_{signal_number}'].map(
+        df[f"freq_{signal_number}"] = df[f"sig_{signal_number}"].map(
             FREQUENCY_MHZ_BY_SIGNAL
         )
 
@@ -117,16 +113,16 @@ def make_1sec(df):
     Default method is 'first', but can be changed to any valid pandas aggregation method (e.g., 'mean', 'max', 'min').
     """
 
-    df['secbin'] = df['datetime'].dt.floor('1s')
-    df=df.groupby(['secbin', 'prn']).first().reset_index()
+    df["secbin"] = df["datetime"].dt.floor("1s")
+    df = df.groupby(["secbin", "prn"]).first().reset_index()
     return df
 
-def make_1min(df,method='first'):
 
+def make_1min(df, method="first"):
     """
     Resample the dataframe to 1 minute intervals, grouping by 'minbin' and 'prn'.
     Default method is 'first', but can be changed to any valid pandas aggregation method (e.g., 'mean', 'max', 'min').
     """
 
-    df=df.groupby(['minbin', 'prn']).agg(method).reset_index()
+    df = df.groupby(["minbin", "prn"]).agg(method).reset_index()
     return df

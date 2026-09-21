@@ -1,8 +1,8 @@
-from ftplib import FTP_TLS
-from datetime import datetime, timedelta
-from pathlib import Path
 import gzip
 import shutil
+from datetime import datetime, timedelta
+from ftplib import FTP_TLS
+from pathlib import Path
 
 
 def date_to_gps_week(date_obj):
@@ -57,21 +57,15 @@ def download_sp3_files(
     current_date = start_date
 
     try:
-
         while current_date <= end_date:
-
             year = current_date.year
             doy = current_date.timetuple().tm_yday
 
             gps_week, _ = date_to_gps_week(current_date)
 
-            filename = (
-                f"IAC0MGXFIN_{year}{doy:03d}0000_01D_05M_ORB.SP3"
-            )
+            filename = f"IAC0MGXFIN_{year}{doy:03d}0000_01D_05M_ORB.SP3"
 
-            remote_file = (
-                f"gnss/products/{gps_week:04d}/{filename}.gz"
-            )
+            remote_file = f"gnss/products/{gps_week:04d}/{filename}.gz"
 
             gz_file = output_dir / f"{filename}.gz"
             sp3_file = output_dir / filename
@@ -84,7 +78,6 @@ def download_sp3_files(
                 continue
 
             try:
-
                 with open(gz_file, "wb") as f:
                     ftps.retrbinary(
                         f"RETR {remote_file}",
@@ -110,5 +103,3 @@ def download_sp3_files(
         ftps.quit()
 
     print("\nFinished downloading SP3 files.")
-
-    

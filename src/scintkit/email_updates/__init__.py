@@ -6,7 +6,6 @@ from importlib import import_module
 from types import ModuleType
 from typing import Any
 
-
 _SUBMODULES = {"core", "mailer", "plotting"}
 _EXPORTS = {
     "load_targets": ("core", "load_targets"),
@@ -18,14 +17,14 @@ _EXPORTS = {
 }
 
 __all__ = [
+    "checklvl3datamissing",
     "core",
+    "generate_availability_plot",
+    "load_targets",
     "mailer",
     "plotting",
-    "load_targets",
     "scan_legacy_files",
     "scan_sc4_files",
-    "checklvl3datamissing",
-    "generate_availability_plot",
     "send_status_email",
 ]
 

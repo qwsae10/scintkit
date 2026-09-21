@@ -151,8 +151,7 @@ def _assign_regular_grid(
                     back[epoch, state] = previous_state
         if np.all(missing_current == unreachable):
             raise ValueError(
-                "no strictly increasing sample-grid path at receiver epoch "
-                f"{epoch:,}"
+                f"no strictly increasing sample-grid path at receiver epoch {epoch:,}"
             )
         missing_previous = missing_current
         error_previous = error_current
@@ -260,24 +259,20 @@ def reconstruct_receiver_clock(
     fixed_by_original_epoch = np.full(len(starts), NAT_INT, dtype="int64")
     fixed_by_original_epoch[keep_epoch] = fixed_epoch_times
     new_epoch_by_original = np.full(len(starts), -1, dtype="int32")
-    new_epoch_by_original[keep_epoch] = np.arange(
-        len(fixed_epoch_times), dtype="int32"
-    )
+    new_epoch_by_original[keep_epoch] = np.arange(len(fixed_epoch_times), dtype="int32")
 
     repaired = frame.loc[keep_row].copy().reset_index(drop=True)
     kept_original_epoch = epoch_ids[keep_row]
-    repaired[time_column] = pd.to_datetime(
-        fixed_by_original_epoch[kept_original_epoch]
-    )
+    repaired[time_column] = pd.to_datetime(fixed_by_original_epoch[kept_original_epoch])
     repaired["_receiver_epoch"] = new_epoch_by_original[kept_original_epoch]
 
     period_ns = int(round(1_000_000_000 / sample_rate_hz))
     steps = np.diff(fixed_epoch_times) // period_ns
     report = ReceiverClockReport(
-        input_rows=int(len(frame)),
-        output_rows=int(len(repaired)),
-        receiver_epochs_before_deduplication=int(len(starts)),
-        receiver_epochs_after_deduplication=int(len(fixed_epoch_times)),
+        input_rows=len(frame),
+        output_rows=len(repaired),
+        receiver_epochs_before_deduplication=len(starts),
+        receiver_epochs_after_deduplication=len(fixed_epoch_times),
         exact_duplicate_receiver_epochs_removed=int(duplicate_epoch.sum()),
         exact_duplicate_rows_removed=int((~keep_row).sum()),
         gps_week_rollovers_unwrapped=rollover_count,
