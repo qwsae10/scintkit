@@ -1,19 +1,14 @@
-
-#%%
-import sys
+# %%
 
 from pathlib import Path
-
-import numpy as np
-import pandas as pd
 
 import scintkit
 
 data_dir = Path("/titan/frodrigues/storm_data/oct10_11_2024/pending/")
 raw_files = sorted(data_dir.glob("scintpi3_*.bin.zip"))
-#These can also be .bin or .bin.zip files
+# These can also be .bin or .bin.zip files
 
-#if taking too long, specify subset
+# if taking too long, specify subset
 raw_files = raw_files
 
 if not raw_files:
@@ -22,7 +17,6 @@ if not raw_files:
         "Start Jupyter from the repository root, or update data_dir."
     )
 
-lvl3_files = scintkit.pipelines.auto.process(raw_files, verbose=True,mode='lvl3')
+lvl3_files = scintkit.pipelines.auto.process(raw_files, verbose=True, mode="lvl3")
 
 # %%
-

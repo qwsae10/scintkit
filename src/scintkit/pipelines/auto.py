@@ -1,13 +1,12 @@
-
 import os
-from scintkit.preprocessing.format import temp_formating,make_1min,make_1sec
+from pathlib import Path
+
+import pandas as pd
+
+from scintkit.preprocessing.format import make_1min, make_1sec
 from scintkit.services.compute import add_products
 from scintkit.services.convert_to_parquet import process_one
 
-import pandas as pd
-import os
-import pandas as pd
-from pathlib import Path
 
 def get_type(f):
     name = Path(f).name.lower()
@@ -29,7 +28,7 @@ def get_type(f):
     return None
 
 
-def process(flist, verbose=False,mode='both',fs=50):
+def process(flist, verbose=False, mode="both", fs=50):
     """
     Wrapper to run full pipeline on list of files and make high level scintillation index product files (lvl3)
     Inputs:
@@ -50,7 +49,7 @@ def process(flist, verbose=False,mode='both',fs=50):
     - s4_quality_flag_1/2/3: binary S4 quality flags; 0 is good and 1 marks fewer than 80% of the expected samples
     - s4_1, s4_2, s4_3: S4 index computed from SNR values for each frequency
     - s4_corrected_1, s4_corrected_2, s4_corrected_3: S4 index corrected for bias based on Van Dierendonck (1993) method
-    - clock_term: estimated common clock term (in units of radians/frequency) across all frequencies, used for detrending phases to compute sigma_phi 
+    - clock_term: estimated common clock term (in units of radians/frequency) across all frequencies, used for detrending phases to compute sigma_phi
 
     """
 
@@ -69,19 +68,21 @@ def process(flist, verbose=False,mode='both',fs=50):
 
     converted_files = []
 
-    allowed_types = ['bin', 'binzip', 'lvl0',]
+    allowed_types = [
+        "bin",
+        "binzip",
+        "lvl0",
+    ]
 
-    flist=[f for f in flist if get_type(f) in allowed_types]
-    
+    flist = [f for f in flist if get_type(f) in allowed_types]
+
     for fname in flist:
-        
         try:
-
             if verbose:
                 print(f"Processing {fname}...")
 
             ext = os.path.splitext(str(fname))[1].lower()
-            
+
             # skip conversion if already parquet
             if ext in [".pq", ".parquet"]:
                 pq_fname = fname
@@ -91,48 +92,58 @@ def process(flist, verbose=False,mode='both',fs=50):
             if verbose:
                 print(f"Reading and formatting parquet file: {pq_fname}...")
             df = pd.read_parquet(pq_fname)
-            df = add_products(df, verbose=verbose,fs=fs)
-            
 
-            if mode=='lvl2':
+            # Pass merge=False to avoid massive memory duplication
+            df, products = add_products(df, verbose=verbose, fs=fs, merge=False)
+
+            if mode == "lvl2":
                 df = make_1sec(df)
+                if products is not None:
+                    df = df.merge(products, on=["prn", "minbin"], how="left")
                 outname = str(pq_fname).replace("_lvl0", "_lvl2")
-
                 df.to_parquet(outname)
                 converted_files.append(outname)
 
-
-            if mode=='lvl3':
+            elif mode == "lvl3":
                 df = make_1min(df)
+                if products is not None:
+                    df = df.merge(products, on=["prn", "minbin"], how="left")
                 outname = str(pq_fname).replace("_lvl0", "_lvl3")
                 df.to_parquet(outname)
                 converted_files.append(outname)
 
-            if mode =='both':
+            elif mode == "both":
                 df_1min = make_1min(df)
+                if products is not None:
+                    df_1min = df_1min.merge(products, on=["prn", "minbin"], how="left")
                 outname_1min = str(pq_fname).replace("_lvl0", "_lvl3")
                 df_1min.to_parquet(outname_1min)
                 converted_files.append(outname_1min)
+
+                del df_1min
+                import gc
+
+                gc.collect()
+
                 df_1sec = make_1sec(df)
+                if products is not None:
+                    df_1sec = df_1sec.merge(products, on=["prn", "minbin"], how="left")
                 outname_1sec = str(pq_fname).replace("_lvl0", "_lvl2")
                 df_1sec.to_parquet(outname_1sec)
                 converted_files.append(outname_1sec)
 
-
-
             if verbose:
                 print(f"Finished processing {fname}.")
 
-
         except Exception as e:
-            print(f"Error processing {fname}") 
+            print(f"Error processing {fname}")
             print(e)
             continue
     return converted_files
 
+
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import os
-from pathlib import Path
+
 import numpy as np
 
 
@@ -160,10 +171,7 @@ def process_parallel(flist, n_workers=4, verbose=False, mode="both"):
     all_outputs = []
 
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
-        futures = [
-            executor.submit(process, chunk, verbose, mode)
-            for chunk in chunks
-        ]
+        futures = [executor.submit(process, chunk, verbose, mode) for chunk in chunks]
 
         for future in as_completed(futures):
             try:

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
 
-#%%
+# %%
 
-import glob
 import os
 import re
 import shutil
@@ -18,21 +17,22 @@ import pandas as pd
 
 from scintkit.reading.binaryreaders import readv324, readv325, readv326
 
-
 READERS = {
     "v324": readv324,
     "v325": readv325,
     "v326": readv326,
 }
 
+
 def drop_unnecessary_columns(df: pd.DataFrame) -> pd.DataFrame:
-    #to reduce file size, drop columns that are not needed for scintillation analysis. These can be re-added later if needed.
-    cols=['sats','pst1','pst2','rst1','rst2','lck1','lck2']
-    df=df.drop(columns=cols, errors='ignore')
-    df=df[df.svid!=255]
-    df["elev"] = df["elev"].astype("uint8")   # 0–90
+    # to reduce file size, drop columns that are not needed for scintillation analysis. These can be re-added later if needed.
+    cols = ["sats", "pst1", "pst2", "rst1", "rst2", "lck1", "lck2"]
+    df = df.drop(columns=cols, errors="ignore")
+    df = df[df.svid != 255]
+    df["elev"] = df["elev"].astype("uint8")  # 0–90
     df["azim"] = df["azim"].astype("uint16")  # 0–359 or 0–360
     return df
+
 
 def get_version(path: str | os.PathLike) -> str | None:
     path = os.fspath(path)
@@ -40,6 +40,7 @@ def get_version(path: str | os.PathLike) -> str | None:
     if m:
         return f"v{m.group(1)}"
     return None
+
 
 def build_output_path(
     input_file: str,
@@ -57,6 +58,7 @@ def build_output_path(
         rel = os.path.splitext(rel)[0]
 
     return os.path.join(output_root, rel + output_suffix)
+
 
 def gpsweek_tow_to_datetime(df: pd.DataFrame) -> pd.DataFrame:
     if "week" in df.columns and "towe" in df.columns:
@@ -77,6 +79,7 @@ def read_binary_file(bin_file: str, version: str) -> pd.DataFrame:
         raise ValueError(f"unsupported version: {version}")
     return reader(bin_file)
 
+
 def process_one(
     input_file: str | os.PathLike,
     input_root: str | os.PathLike | None = None,
@@ -88,7 +91,6 @@ def process_one(
     verbose: bool = True,
 ) -> str:
     local_tmpdir = None
-
 
     try:
         input_file = os.fspath(input_file)
@@ -115,7 +117,7 @@ def process_one(
             return output_file
 
         version = get_version(input_file)
-        
+
         if version is None:
             raise ValueError(f"could not determine version from filename: {input_file}")
 
@@ -151,12 +153,10 @@ def process_one(
         df = read_binary_file(local_bin, version)
         df = gpsweek_tow_to_datetime(df)
 
-
-        df=drop_unnecessary_columns(df)
+        df = drop_unnecessary_columns(df)
 
         if verbose:
             print(f"writing to local parquet: {local_pq}")
-
 
         df.to_parquet(
             local_pq,
@@ -187,6 +187,7 @@ def process_one(
             except Exception as e:
                 print(f"cleanup failed for {local_tmpdir}: {e}")
 
+
 def _process_one_star(args):
     return process_one(*args)
 
@@ -202,7 +203,6 @@ def process_files(
     overwrite: bool = False,
     verbose: bool = True,
 ) -> list[str]:
-    
     """
     Convert a list of binary files to Parquet format, with optional parallel processing (set n_workers).
 
@@ -261,5 +261,6 @@ def process_files_slurm(
         overwrite=overwrite,
         verbose=verbose,
     )
+
 
 # %%

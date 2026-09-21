@@ -89,9 +89,7 @@ def test_carrier_tec_median_is_leveled_to_pseudorange_by_time_segment():
 def test_carrier_data_outage_over_five_minutes_starts_new_segment():
     frame = pd.DataFrame(
         {
-            "datetime": pd.date_range(
-                "2024-01-01 00:00:00", periods=10, freq="min"
-            ),
+            "datetime": pd.date_range("2024-01-01 00:00:00", periods=10, freq="min"),
             "prn": ["G15"] * 10,
             "cph1": [1_000.0, 1_000.0] + [np.nan] * 6 + [2_000.0, 2_000.0],
             "cph2": [900.0, 900.0] + [np.nan] * 6 + [1_800.0, 1_800.0],

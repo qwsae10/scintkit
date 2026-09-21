@@ -2,18 +2,15 @@
 
 import glob
 import os
-from multiprocessing import Pool
-from pathlib import Path
 
 import numpy as np
 
-from scintkit.reading.binaryreaders import readv324, readv325, readv326
 from scintkit.services.convert_to_parquet import (
     build_output_path,
     get_version,
-    process_files
-
+    process_files,
 )
+
 
 def find_missing_inputs(
     input_pattern: str,
@@ -55,6 +52,8 @@ def chunk_for_slurm(
 
     chunks = np.array_split(flist, n_tasks)
     return list(chunks[task_id])
+
+
 def resolve_flist(
     flist: list[str] | None = None,
     input_pattern: str | None = None,
@@ -87,9 +86,7 @@ def resolve_flist(
 
         return files
 
-    raise ValueError(
-        "Must provide one of: flist, input_pattern, or infer_missing=True"
-    )
+    raise ValueError("Must provide one of: flist, input_pattern, or infer_missing=True")
 
 
 def run_conversion(
@@ -135,7 +132,9 @@ def run_conversion(
             resolved_task_id = task_id
             if resolved_task_id is None:
                 resolved_task_id = int(os.environ.get("SLURM_ARRAY_TASK_ID", 0))
-            print(f"mode=slurm task_id={resolved_task_id} files_in_chunk={len(flist_resolved)}")
+            print(
+                f"mode=slurm task_id={resolved_task_id} files_in_chunk={len(flist_resolved)}"
+            )
 
     elif mode != "single":
         raise ValueError("mode must be 'single' or 'slurm'")

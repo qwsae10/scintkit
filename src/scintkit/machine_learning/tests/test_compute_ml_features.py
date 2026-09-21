@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -31,14 +31,8 @@ from scintkit.preprocessing.format import add_sigs, make_prn
 from scintkit.services.compute import _repair_tec_pair, compute_s4
 from scintkit.services.phase_detrend import repair_discontinuities_pos
 
-
-EXAMPLE_SOURCE_NAME = (
-    "scintpi3_20240120_2000_"
-    "359072.9062W_72126.7422S_v326d.pq"
-)
-DECIMAL_DEGREE_SOURCE_NAME = (
-    "scintpi3_20260408_2000_96.79263W_46.90714N_v326f.pq"
-)
+EXAMPLE_SOURCE_NAME = "scintpi3_20240120_2000_359072.9062W_72126.7422S_v326d.pq"
+DECIMAL_DEGREE_SOURCE_NAME = "scintpi3_20260408_2000_96.79263W_46.90714N_v326f.pq"
 
 
 def test_ml_batch_import_does_not_import_matplotlib() -> None:
@@ -197,9 +191,7 @@ def test_periodogram_places_tone_in_expected_band_and_keeps_first_bin() -> None:
     assert np.isfinite(powers["0p1_0p3_hz"])
     assert powers["0p1_0p3_hz"] > powers["0p05_0p1_hz"] + 20
     first_bin = np.sin(2 * np.pi * (1 / 60) * time)
-    first_bin_powers = integrate_periodogram_bands_db(
-        first_bin, preprocessing="median"
-    )
+    first_bin_powers = integrate_periodogram_bands_db(first_bin, preprocessing="median")
     assert np.isfinite(first_bin_powers["0p017_0p05_hz"])
 
 
@@ -306,28 +298,43 @@ def test_vectorized_format_mappings_match_previous_semantics() -> None:
             "svid": [1, 12, 3, 25, 7, 123],
         }
     )
-    old_prn = (
-        frame["cons"].map(
-            {
-                "GPS": "G", "BDS": "C", "GAL": "E", "GLO": "R",
-                "QZSS": "J", "IRNSS": "I", "SBAS": "S", "SBS": "S",
-            }
-        )
-        + frame["svid"].astype(int).astype(str).str.zfill(2)
-    )
+    old_prn = frame["cons"].map(
+        {
+            "GPS": "G",
+            "BDS": "C",
+            "GAL": "E",
+            "GLO": "R",
+            "QZSS": "J",
+            "IRNSS": "I",
+            "SBAS": "S",
+            "SBS": "S",
+        }
+    ) + frame["svid"].astype(int).astype(str).str.zfill(2)
     assert make_prn(frame).equals(old_prn)
 
     formatted = add_sigs(frame.copy())
     assert formatted["sig_1"].iloc[:5].tolist() == [
-        "GPS_L1CA", "GLO_L1CA", "GAL_L1BC", "BDS_B1I", "QZS_L1CA"
+        "GPS_L1CA",
+        "GLO_L1CA",
+        "GAL_L1BC",
+        "BDS_B1I",
+        "QZS_L1CA",
     ]
     assert formatted["sig_2"].iloc[:5].tolist() == [
-        "GPS_L2C", "GLO_L2C", "GAL_E5b", "BDS_B2I", "QZS_L2C"
+        "GPS_L2C",
+        "GLO_L2C",
+        "GAL_E5b",
+        "BDS_B2I",
+        "QZS_L2C",
     ]
     assert pd.isna(formatted.loc[5, "sig_1"])
     assert pd.isna(formatted.loc[5, "sig_2"])
     assert formatted["freq_1"].iloc[:5].tolist() == [
-        1575.42, 1602.0, 1575.42, 1561.098, 1575.42
+        1575.42,
+        1602.0,
+        1575.42,
+        1561.098,
+        1575.42,
     ]
 
 
@@ -347,9 +354,7 @@ def test_paired_tec_repair_matches_two_independent_repairs() -> None:
         reference, _, _ = repair_discontinuities_pos(
             pd.Series(values[:, column_number]), fs=20, threshold=1
         )
-        assert np.allclose(
-            paired[column], reference, equal_nan=True, rtol=0, atol=0
-        )
+        assert np.allclose(paired[column], reference, equal_nan=True, rtol=0, atol=0)
 
 
 def test_common_mode_uses_all_satellites_before_minute_aggregation() -> None:
@@ -446,9 +451,7 @@ def test_receiver_clock_falls_back_to_sample_order_for_ambiguous_epochs() -> Non
 
     repaired, report = reconstruct_receiver_clock(pd.DataFrame(rows))
     epoch_times = (
-        repaired.groupby("_receiver_epoch", sort=True)["datetime"]
-        .first()
-        .sort_index()
+        repaired.groupby("_receiver_epoch", sort=True)["datetime"].first().sort_index()
     )
     assert report.sample_order_grid_fallback_used
     assert report.receiver_epochs_after_deduplication == 3

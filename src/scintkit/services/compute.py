@@ -1,9 +1,10 @@
-#%%
+# %%
 import numpy as np
 import pandas as pd
 
 from scintkit.preprocessing.format import temp_formating
 from scintkit.services.phase_detrend import detect_sampling_rate, process_phases
+
 
 def carrier_phase_tec(phi1_cyc, phi2_cyc, f1_hz, f2_hz):
     c = 299792458  # m/s
@@ -11,18 +12,18 @@ def carrier_phase_tec(phi1_cyc, phi2_cyc, f1_hz, f2_hz):
     lambda1 = c / f1_hz
     lambda2 = c / f2_hz
 
-    phi1_m = phi1_cyc * lambda1 
-    phi2_m = phi2_cyc * lambda2 
+    phi1_m = phi1_cyc * lambda1
+    phi2_m = phi2_cyc * lambda2
 
     tec_factor = (f1_hz**2 * f2_hz**2) / (40.3 * (f1_hz**2 - f2_hz**2))
 
-    return tec_factor * (phi1_m - phi2_m)/1e16
+    return tec_factor * (phi1_m - phi2_m) / 1e16
 
 
 def pseudorange_tec(P1_m, P2_m, f1_hz, f2_hz):
     tec_factor = (f1_hz**2 * f2_hz**2) / (40.3 * (f1_hz**2 - f2_hz**2))
 
-    return tec_factor * (P2_m - P1_m)/1e16
+    return tec_factor * (P2_m - P1_m) / 1e16
 
 
 def _repair_tec_pair(values, fs, threshold=1):
@@ -41,8 +42,7 @@ def _repair_tec_pair(values, fs, threshold=1):
     window = int(10 * fs)
     deltas = values.diff()
     trends = (
-        deltas
-        .rolling(window=window, center=True, min_periods=max(3, window // 10))
+        deltas.rolling(window=window, center=True, min_periods=max(3, window // 10))
         .median()
         .bfill()
         .ffill()
@@ -68,10 +68,12 @@ def _repair_tec_pair(values, fs, threshold=1):
         for start, stop in zip(starts, stops):
             result.iloc[start] = source.iloc[start]
             if start + 1 < stop:
-                increments = clean_deltas.iloc[start + 1:stop].interpolate(
-                    limit_direction="both"
-                ).fillna(0.0)
-                result.iloc[start + 1:stop] = (
+                increments = (
+                    clean_deltas.iloc[start + 1 : stop]
+                    .interpolate(limit_direction="both")
+                    .fillna(0.0)
+                )
+                result.iloc[start + 1 : stop] = (
                     source.iloc[start] + increments.cumsum()
                 ).to_numpy()
     return repaired
@@ -129,16 +131,20 @@ def add_tec_columns(df, pair="13", fs=None, max_gap="5min", *, copy=True):
     )
     rng1_all[rng1_all == 0] = np.nan
     rng2_all[rng2_all == 0] = np.nan
-    f1_all = pd.to_numeric(df[f"freq_{number_1}"], errors="coerce").to_numpy(
-        dtype=float
-    ) * 1e6
-    f2_all = pd.to_numeric(df[f"freq_{number_2}"], errors="coerce").to_numpy(
-        dtype=float
-    ) * 1e6
+    f1_all = (
+        pd.to_numeric(df[f"freq_{number_1}"], errors="coerce").to_numpy(dtype=float)
+        * 1e6
+    )
+    f2_all = (
+        pd.to_numeric(df[f"freq_{number_2}"], errors="coerce").to_numpy(dtype=float)
+        * 1e6
+    )
     if "datetime" in df.columns:
-        time_all = pd.to_datetime(df["datetime"], errors="coerce").to_numpy(
-            dtype="datetime64[ns]"
-        ).astype("int64")
+        time_all = (
+            pd.to_datetime(df["datetime"], errors="coerce")
+            .to_numpy(dtype="datetime64[ns]")
+            .astype("int64")
+        )
         nat = np.datetime64("NaT", "ns").astype("int64")
     else:
         time_all = None
@@ -190,13 +196,8 @@ def add_tec_columns(df, pair="13", fs=None, max_gap="5min", *, copy=True):
             previous_valid_index = np.r_[-1, last_valid_index[:-1]]
             has_previous = previous_valid_index >= 0
             carrier_gap = np.zeros(len(positions), dtype=bool)
-            carrier_gap[has_previous] = (
-                carrier_valid[has_previous]
-                & (
-                    time[has_previous]
-                    - time[previous_valid_index[has_previous]]
-                    > gap_ns
-                )
+            carrier_gap[has_previous] = carrier_valid[has_previous] & (
+                time[has_previous] - time[previous_valid_index[has_previous]] > gap_ns
             )
             new_segment |= carrier_gap
             new_segment[0] = False
@@ -204,9 +205,7 @@ def add_tec_columns(df, pair="13", fs=None, max_gap="5min", *, copy=True):
         boundaries = np.r_[0, np.flatnonzero(new_segment), len(positions)]
         for start, stop in zip(boundaries[:-1], boundaries[1:]):
             repaired = _repair_tec_pair(
-                np.column_stack(
-                    [carrier_raw[start:stop], pseudo_raw[start:stop]]
-                ),
+                np.column_stack([carrier_raw[start:stop], pseudo_raw[start:stop]]),
                 fs=fs,
                 threshold=1,
             )
@@ -228,6 +227,7 @@ def add_tec_columns(df, pair="13", fs=None, max_gap="5min", *, copy=True):
     df[f"tec_rng{pair}"] = pseudo_output
     return df
 
+
 def compute_s4(snr):
     snr = snr.dropna()
     if len(snr) == 0:
@@ -238,17 +238,16 @@ def compute_s4(snr):
     std = np.std(lin_snr)
 
     return std / mean if mean > 0 else np.nan
-    
+
+
 MIN_TAU_SAMPLES = 1000
 MIN_UNIQUE_SNR = 2
+
 
 def compute_tau(snr, fs):
     snr = snr.dropna()
 
-    if (
-        len(snr) < MIN_TAU_SAMPLES
-        or snr.nunique() < MIN_UNIQUE_SNR
-    ):
+    if len(snr) < MIN_TAU_SAMPLES or snr.nunique() < MIN_UNIQUE_SNR:
         return np.nan
 
     amp = snr.to_numpy(dtype=float)
@@ -257,9 +256,9 @@ def compute_tau(snr, fs):
     amp = amp - np.nanmean(amp)
 
     # autocorrelation
-    #ac = np.correlate(amp, amp, mode="full")
+    # ac = np.correlate(amp, amp, mode="full")
     ac = np.correlate(amp, amp, mode="full")
-    ac = ac[len(ac)//2:]
+    ac = ac[len(ac) // 2 :]
 
     peak_idx = np.argmax(ac)
     peak = ac[peak_idx]
@@ -273,7 +272,7 @@ def compute_tau(snr, fs):
 
     dt = 1.0 / fs
 
-    return (right - peak_idx) * dt    
+    return (right - peak_idx) * dt
 
 
 def compute_s4_corrected(snr):
@@ -296,7 +295,6 @@ def compute_s4_corrected(snr):
 
 def compute_n_cycleslips(cycleslips):
     return int(cycleslips.fillna(False).sum())
-
 
 
 def compute_n_samples(col):
@@ -345,21 +343,19 @@ def _add_quality_flags(products, fs):
                 | products[phase_count_col].lt(sigma_phi_min_samples)
                 | is_glonass
             )
-            products[f"sigma_phi_quality_flag_{i}"] = sigma_phi_bad.astype(
-                np.int8
-            )
+            products[f"sigma_phi_quality_flag_{i}"] = sigma_phi_bad.astype(np.int8)
 
         if s4_count_col in products.columns:
-            products[f"s4_quality_flag_{i}"] = products[s4_count_col].lt(
-                s4_min_samples
-            ).astype(np.int8)
+            products[f"s4_quality_flag_{i}"] = (
+                products[s4_count_col].lt(s4_min_samples).astype(np.int8)
+            )
 
         internal_columns.append(edge_gap_col)
 
     return products.drop(columns=internal_columns, errors="ignore")
 
 
-def add_products(df,verbose=False,fs=None):
+def add_products(df, verbose=False, fs=None, merge=True):
     """
     This function takes a full-rate dataframe (fs=20 or 10 Hz) at and computes various products:
     - tec12 and tec13: differences between detrended phases to estimate TEC (WIP)
@@ -371,39 +367,36 @@ def add_products(df,verbose=False,fs=None):
     - s4_quality_flag_1/2/3: binary S4 quality flags; 0 is good and 1 marks fewer than 80% of the expected samples
     - s4_1, s4_2, s4_3: S4 index computed from SNR values for each frequency
     - s4_corrected_1, s4_corrected_2, s4_corrected_3: S4 index corrected for bias based on Van Dierendonck (1993) method
-    The function groups the data by PRN and 1-minute bins to compute these products, and then merges the results back to the original dataframe in the same time bins.
+    The function groups the data by PRN and 1-minute bins to compute these products, and then merges the results back to the original dataframe in the same time bins (if merge=True).
     """
 
     if verbose:
         print("Ensuring format...")
-    df=temp_formating(df)
+    df = temp_formating(df)
     if verbose:
-        print("Processing phases...")   
+        print("Processing phases...")
     df = process_phases(df)
-    
+
     if fs is None:
         fs = detect_sampling_rate(df)
 
     if fs is None:
         raise ValueError("Could not determine sampling rate.")
-    
+
     if verbose:
         print("Computing TEC...")
 
-    if f"cph1" in df.columns and f"cph2" in df.columns:
-        df=add_tec_columns(df,fs=fs, pair="12")
-    if f"cph1" in df.columns and f"cph3" in df.columns:
-        df=add_tec_columns(df,fs=fs, pair="13")
+    if "cph1" in df.columns and "cph2" in df.columns:
+        df = add_tec_columns(df, fs=fs, pair="12")
+    if "cph1" in df.columns and "cph3" in df.columns:
+        df = add_tec_columns(df, fs=fs, pair="13")
 
-    
     if verbose:
         print("Computing products...")
 
     group_cols = ["prn", "minbin"]
     agg_dict = {}
     for i in ("1", "2", "3"):
-
-
         detrended_noclk_col = f"detrended_noclk_cph{i}"
         cycleslip_col = f"cycleslips_cph{i}"
         edgegap_col = f"edgegap_mask_cph{i}"
@@ -424,34 +417,31 @@ def add_products(df,verbose=False,fs=None):
         if edgegap_col in df.columns:
             agg_dict[f"_sigma_phi_edge_gap_{i}"] = (
                 edgegap_col,
-                lambda x: int(x.fillna(False).astype(bool).any())
+                lambda x: int(x.fillna(False).astype(bool).any()),
             )
 
         if snr_col in df.columns:
             agg_dict[f"s4_{i}"] = (snr_col, compute_s4)
             agg_dict[f"s4_corrected_{i}"] = (snr_col, compute_s4_corrected)
-            agg_dict[f"tau_{i}"] = (
-                snr_col,
-                lambda x, fs=fs: compute_tau(x, fs)
-            )
+            agg_dict[f"tau_{i}"] = (snr_col, lambda x, fs=fs: compute_tau(x, fs))
             agg_dict[f"n_s4_{i}"] = (
                 snr_col,
                 compute_n_samples,
             )
-           
+
     if not agg_dict:
+        return df if merge else (df, None)
+
+    products = df.groupby(group_cols, sort=False).agg(**agg_dict).reset_index()
+    products = _add_quality_flags(products, fs=fs)
+
+    if merge:
+        if verbose:
+            print("Merging products back to original dataframe...")
+        df = df.merge(products, on=group_cols, how="left")
         return df
 
-    products = (
-        df.groupby(group_cols, sort=False)
-        .agg(**agg_dict)
-        .reset_index()
-    )
-    products = _add_quality_flags(products, fs=fs)
-    if verbose:
-        print("Merging products back to original dataframe...")
-    df = df.merge(products, on=group_cols, how="left")
+    return df, products
 
-    return df
 
 # %%

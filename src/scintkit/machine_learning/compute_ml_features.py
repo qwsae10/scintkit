@@ -143,9 +143,9 @@ def integrate_periodogram_bands_db(
     for label, lower, upper in SPECTRAL_BANDS:
         # Shared band-edge samples are valid trapezoid endpoints for both
         # adjacent integrals; they do not represent a finite duplicated area.
-        selected = (
-            frequencies >= lower - tolerance
-        ) & (frequencies <= upper + tolerance)
+        selected = (frequencies >= lower - tolerance) & (
+            frequencies <= upper + tolerance
+        )
         if np.count_nonzero(selected) < 2:
             result[label] = np.nan
             continue
@@ -185,9 +185,9 @@ def regular_minute_signal(
 ) -> tuple[np.ndarray | None, int]:
     """Place values on the internal 20 Hz minute grid and fill small gaps."""
 
-    time_ns = satellite_minute["datetime"].to_numpy(
-        dtype="datetime64[ns]"
-    ).astype("int64")
+    time_ns = (
+        satellite_minute["datetime"].to_numpy(dtype="datetime64[ns]").astype("int64")
+    )
     source_values = pd.to_numeric(
         satellite_minute[value_column], errors="coerce"
     ).to_numpy(dtype=float)
@@ -263,18 +263,14 @@ def compute_minute_summary(frame: pd.DataFrame) -> pd.DataFrame:
     )
     summary["s4_1"] = s4[:, 0]
     summary["s4_2"] = s4[:, 1]
-    return summary.reset_index().rename(
-        columns={"minbin": "minute_timestamp_utc"}
-    )
+    return summary.reset_index().rename(columns={"minbin": "minute_timestamp_utc"})
 
 
 def _empty_common_features() -> pd.DataFrame:
     columns: dict[str, pd.Series] = {
         "minute_timestamp_utc": pd.Series(dtype="datetime64[ns]")
     }
-    columns.update(
-        {column: pd.Series(dtype="float64") for column in COMMON_COLUMNS}
-    )
+    columns.update({column: pd.Series(dtype="float64") for column in COMMON_COLUMNS})
     columns["n_common_delta_snr1"] = pd.Series(dtype="Int64")
     columns["n_common_delta_snr2"] = pd.Series(dtype="Int64")
     return pd.DataFrame(columns)
@@ -297,9 +293,7 @@ def compute_common_mode_minute_features(
     minimum_observations = max(
         1,
         math.ceil(
-            pd.Timedelta(rolling_window).total_seconds()
-            * fs_hz
-            * rolling_min_fraction
+            pd.Timedelta(rolling_window).total_seconds() * fs_hz * rolling_min_fraction
         ),
     )
     pass_gap_ns = pd.Timedelta(pass_gap).value
@@ -414,7 +408,10 @@ def _add_spectral_values(
         preprocessing=preprocessing,
     )
     record.update(
-        {column: powers[label] for column, (label, _, _) in zip(columns, SPECTRAL_BANDS)}
+        {
+            column: powers[label]
+            for column, (label, _, _) in zip(columns, SPECTRAL_BANDS)
+        }
     )
 
 
@@ -431,9 +428,7 @@ def compute_features(
     if not input_path.is_file():
         raise FileNotFoundError(input_path)
     if not 0 <= n_threshold < EXPECTED_MINUTE_SAMPLES:
-        raise ValueError(
-            f"n_threshold must be in [0, {EXPECTED_MINUTE_SAMPLES - 1}]"
-        )
+        raise ValueError(f"n_threshold must be in [0, {EXPECTED_MINUTE_SAMPLES - 1}]")
     if not np.isfinite(s4_threshold) or s4_threshold < 0:
         raise ValueError("s4_threshold must be finite and nonnegative")
 
@@ -515,20 +510,12 @@ def compute_features(
         copy=False,
     )
 
-    signal_groups = frame.groupby(
-        ["prn", "minbin"], sort=False, observed=True
-    ).indices
-    signal_time = frame["datetime"].to_numpy(
-        dtype="datetime64[ns]"
-    ).astype("int64")
+    signal_groups = frame.groupby(["prn", "minbin"], sort=False, observed=True).indices
+    signal_time = frame["datetime"].to_numpy(dtype="datetime64[ns]").astype("int64")
     snr1_all = frame["snr1"].to_numpy(dtype=float)
     snr2_all = frame["snr2"].to_numpy(dtype=float)
-    tec_groups = tec_frame.groupby(
-        ["prn", "minbin"], sort=False, observed=True
-    ).indices
-    tec_time = tec_frame["datetime"].to_numpy(
-        dtype="datetime64[ns]"
-    ).astype("int64")
+    tec_groups = tec_frame.groupby(["prn", "minbin"], sort=False, observed=True).indices
+    tec_time = tec_frame["datetime"].to_numpy(dtype="datetime64[ns]").astype("int64")
     tec12_all = tec_frame["tec_cph12"].to_numpy(dtype=float)
     del frame, tec_frame
 
@@ -596,9 +583,11 @@ def compute_features(
         "n_common_delta_snr2",
     ):
         output[count_column] = output[count_column].astype("Int64")
-    output = output.loc[:, OUTPUT_COLUMNS].sort_values(
-        ["minute_timestamp_utc", "prn"], kind="stable"
-    ).reset_index(drop=True)
+    output = (
+        output.loc[:, OUTPUT_COLUMNS]
+        .sort_values(["minute_timestamp_utc", "prn"], kind="stable")
+        .reset_index(drop=True)
+    )
     return output, clock_report.to_dict()
 
 
@@ -672,7 +661,9 @@ def main(argv: list[str] | None = None) -> int:
         f"{clock_report['missing_receiver_epochs']:,} missing epochs, "
         f"{clock_report['gps_week_rollovers_unwrapped']} week rollover(s)"
     )
-    print(f"Wrote {len(features):,} rows and {len(features.columns)} columns to {written}")
+    print(
+        f"Wrote {len(features):,} rows and {len(features.columns)} columns to {written}"
+    )
     return 0
 
 

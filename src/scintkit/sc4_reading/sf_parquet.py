@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from scintkit.services.convert_to_parquet import process_files
 
 # Input and output folders
@@ -15,7 +16,7 @@ outputs = process_files(
     flist=flist,
     input_root=input_root,
     output_root=output_root,
-    n_workers=4,      # Use 1 if you don't want multiprocessing
+    n_workers=4,  # Use 1 if you don't want multiprocessing
     overwrite=True,
     verbose=True,
 )

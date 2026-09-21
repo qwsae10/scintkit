@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import pandas as pd
+
 from scintkit.email_updates import (
+    generate_availability_plot,
     load_targets,
     scan_legacy_files,
     scan_sc4_files,
-    generate_availability_plot,
     send_status_email,
 )
 
@@ -17,7 +17,11 @@ def main():
     cutoff = now - pd.DateOffset(months=3)
     out_png = f"stations_availability_lvl3_{now:%Y_%m_%d}.png"
 
-    email_recipients = ["tarunlsankar@gmail.com", "TLS220003@utdallas.edu", "IGW180000@utdallas.edu"]
+    email_recipients = [
+        "tarunlsankar@gmail.com",
+        "TLS220003@utdallas.edu",
+        "IGW180000@utdallas.edu",
+    ]
 
     # 2. Pipeline Execution
     print("Starting ScintPi Pipeline...")

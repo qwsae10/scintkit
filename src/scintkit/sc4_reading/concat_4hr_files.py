@@ -1,6 +1,7 @@
-from pathlib import Path
-import pandas as pd
 import re
+from pathlib import Path
+
+import pandas as pd
 
 
 def merge_4hr_parquet(input_dir, output_dir):
@@ -47,14 +48,13 @@ def merge_4hr_parquet(input_dir, output_dir):
     grouped = {}
 
     for file in input_dir.glob("*.parquet"):
-
         m = pattern.match(file.stem)
 
         if m is None:
             continue
 
-        station = m.group(1)      # mx01
-        doy = m.group(2)          # 316
+        station = m.group(1)  # mx01
+        doy = m.group(2)  # 316
         letter = m.group(3).lower()
         minute = m.group(4)
 
@@ -64,14 +64,12 @@ def merge_4hr_parquet(input_dir, output_dir):
         grouped[key].setdefault(letter, {})
         grouped[key][letter][minute] = file
 
-    for (station, doy) in sorted(grouped):
-
+    for station, doy in sorted(grouped):
         print(f"\nProcessing {station} DOY {doy}")
 
         day_files = grouped[(station, doy)]
 
         for block_id, letters in enumerate(blocks):
-
             start_hour = block_id * 4
             end_hour = start_hour + 4
 
@@ -89,9 +87,7 @@ def merge_4hr_parquet(input_dir, output_dir):
             print(f"  Block {block_id + 1}: {letters}")
 
             for letter in letters:
-
                 for minute in minute_order:
-
                     file = day_files.get(letter, {}).get(minute)
 
                     if file is None:
@@ -108,6 +104,5 @@ def merge_4hr_parquet(input_dir, output_dir):
             merged = pd.concat(dfs, ignore_index=True)
 
             merged.to_parquet(outfile, index=False)
-
 
             print(f"Saved {outfile.name} ({len(merged):,} rows)")

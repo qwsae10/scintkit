@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
 import re
-
+from pathlib import Path
 
 DEFAULT_FILENAME_COORDINATE_SCALE = 10_000.0
 
@@ -43,14 +42,10 @@ def parse_filename_coordinates(
         raw_magnitude = float(match.group("value"))
         axis_limit = 90.0 if axis == "latitude" else 180.0
         magnitude = (
-            raw_magnitude
-            if raw_magnitude <= axis_limit
-            else raw_magnitude / scale
+            raw_magnitude if raw_magnitude <= axis_limit else raw_magnitude / scale
         )
         if not math.isfinite(magnitude) or magnitude > axis_limit:
-            raise ValueError(
-                f"decoded {axis} is outside valid bounds: {raw_magnitude}"
-            )
+            raise ValueError(f"decoded {axis} is outside valid bounds: {raw_magnitude}")
 
         sign = -1.0 if hemisphere in {"S", "W"} else 1.0
         decoded[axis] = sign * magnitude

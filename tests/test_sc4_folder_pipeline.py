@@ -1,8 +1,14 @@
-from pathlib import Path
 import importlib.util
 import sys
+from pathlib import Path
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "src" / "scintkit" / "sc4_reading" / "sc4_s02_txtF2parquet.py"
+MODULE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "scintkit"
+    / "sc4_reading"
+    / "sc4_s02_txtF2parquet.py"
+)
 SPEC = importlib.util.spec_from_file_location("sc4_s02_txtF2parquet", MODULE_PATH)
 sc4_s02_txtF2parquet = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = sc4_s02_txtF2parquet
