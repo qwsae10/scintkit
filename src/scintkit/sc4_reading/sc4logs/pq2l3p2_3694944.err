@@ -1,0 +1,13 @@
+/home/jxg200016/scintkit/src/scintkit/sc4_reading/sc4_s03_pq2lvl3_noelev.py:163: RuntimeWarning: invalid value encountered in sqrt
+  std  = np.sqrt(sum2 / count - mean**2)
+/home/jxg200016/scintkit/src/scintkit/sc4_reading/sc4_s03_pq2lvl3_noelev.py:163: RuntimeWarning: invalid value encountered in sqrt
+  std  = np.sqrt(sum2 / count - mean**2)
+/home/jxg200016/scintkit/src/scintkit/sc4_reading/sc4_s03_pq2lvl3_noelev.py:163: RuntimeWarning: invalid value encountered in sqrt
+  std  = np.sqrt(sum2 / count - mean**2)
+/home/jxg200016/scintkit/src/scintkit/sc4_reading/sc4_s03_pq2lvl3_noelev.py:163: RuntimeWarning: invalid value encountered in sqrt
+  std  = np.sqrt(sum2 / count - mean**2)
+/home/jxg200016/scintkit/src/scintkit/sc4_reading/sc4_s03_pq2lvl3_noelev.py:163: RuntimeWarning: invalid value encountered in sqrt
+  std  = np.sqrt(sum2 / count - mean**2)
+/home/jxg200016/scintkit/src/scintkit/sc4_reading/sc4_s03_pq2lvl3_noelev.py:163: RuntimeWarning: invalid value encountered in sqrt
+  std  = np.sqrt(sum2 / count - mean**2)
+slurmstepd-c-07-05: error: *** JOB 3694944 ON c-07-05 CANCELLED AT 2026-05-20T17:52:45 ***

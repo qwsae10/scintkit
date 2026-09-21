@@ -24,6 +24,12 @@ def pseudorange_tec(P1_m, P2_m, f1_hz, f2_hz):
 
     return tec_factor * (P2_m - P1_m)/1e16
 
+def detrended_snr(snr,mov_avg_seconds = 20):
+    
+    tec_factor = (f1_hz**2 * f2_hz**2) / (40.3 * (f1_hz**2 - f2_hz**2))
+
+    return tec_factor * (P2_m - P1_m)/1e16
+
 
 def _repair_tec_pair(values, fs, threshold=1):
     """Repair carrier and pseudorange TEC with one paired rolling median.
@@ -76,6 +82,10 @@ def _repair_tec_pair(values, fs, threshold=1):
                 ).to_numpy()
     return repaired
 
+def add_dsnr_columns(df,i=1,fs=None, copy=True):
+    dsnr_all = pd.to_numeric(df[f"snr{i}"], errors="coerce").to_numpy(dtype=float)
+    df[f"dsnr{i}"] = dsnr_all
+    return df
 
 def add_tec_columns(df, pair="13", fs=None, max_gap="5min", *, copy=True):
     """Add carrier-phase and pseudorange TEC for a frequency pair.
@@ -85,6 +95,7 @@ def add_tec_columns(df, pair="13", fs=None, max_gap="5min", *, copy=True):
     shifted so that its segment median matches the pseudorange TEC median at
     common valid epochs. Carrier TEC is left missing when a segment has no
     pseudorange overlap and therefore cannot be leveled.
+    fs=None, max_gap="5min", *, copy=True
     """
     if fs is None or not np.isfinite(fs) or fs <= 0:
         raise ValueError("fs must be a positive sampling rate")
@@ -227,12 +238,74 @@ def add_tec_columns(df, pair="13", fs=None, max_gap="5min", *, copy=True):
     df[f"tec_cph{pair}"] = carrier_output
     df[f"tec_rng{pair}"] = pseudo_output
     return df
+    
+def add_snr_columnsJM(df,fs=None,i=1, max_gap="5min", *, copy=True):
+    """Add carrier-phase and pseudorange TEC for a frequency pair.
+    Each PRN is split into continuous time segments. A time gap strictly
+    greater than ``max_gap`` starts a new segment. Carrier and pseudorange TEC
+    are repaired independently within each segment, then the carrier TEC is
+    shifted so that its segment median matches the pseudorange TEC median at
+    common valid epochs. Carrier TEC is left missing when a segment has no
+    pseudorange overlap and therefore cannot be leveled.
+    """
+    if fs is None or not np.isfinite(fs) or fs <= 0:
+        raise ValueError("fs must be a positive sampling rate")
+    expected_columns = [
+        "prn",
+        f"snr{i}"
+    ]
+    missing = [column for column in expected_columns if column not in df.columns]
+    if missing:
+        raise KeyError(f"missing required SNR columns: {missing}")
+
+    if not isinstance(df.index, pd.RangeIndex) or not df.index.equals(
+        pd.RangeIndex(len(df))
+    ):
+        df = df.reset_index(drop=True)
+        copy = False
+    elif copy:
+        df = df.copy()
+    gap_threshold = pd.to_timedelta(max_gap)
+    gap_ns = gap_threshold.value
+    ##############
+    for prn, groupi in df.groupby('prn', sort=False, observed=True):
+        # Get the indices corresponding to this PRN
+        idx = groupi.index
+    
+        # Make sure data are ordered by datetime
+        temp = groupi.sort_values('datetime').copy()
+    
+        temp[f"snr{i}_avg"] = (
+            temp.set_index('datetime')[f"snr{i}"]
+                .rolling("10s", center=True)
+                .mean()
+                .to_numpy()
+        )
+    
+        temp[f"snr{i}_new"] = (temp[f"snr{i}"] - temp[f"snr{i}_avg"] + 40)
+
+        # Put the calculated values back into the original dataframe
+        df.loc[temp.index, f"snr{i}_avg"] = temp[f"snr{i}_avg"]
+        df.loc[temp.index, f"snr{i}_new"] = temp[f"snr{i}_new"]
+
+    return df
 
 def compute_s4(snr):
     snr = snr.dropna()
     if len(snr) == 0:
         return np.nan
 
+    lin_snr = 10 ** (snr / 10)
+    min_snr = np.min(snr)
+    mean = np.mean(lin_snr)
+    std = np.std(lin_snr)
+
+    return std / mean if ((mean > 0)&(min_snr!=0)) else np.nan
+
+def compute_s4_from_detrended_snr(snr):
+    snr = snr.dropna()
+    if len(snr) == 0:
+        return np.nan
     lin_snr = 10 ** (snr / 10)
     mean = np.mean(lin_snr)
     std = np.std(lin_snr)
@@ -382,6 +455,7 @@ def add_products(df,verbose=False,fs=None):
     df = process_phases(df)
     
     if fs is None:
+        #fs = 20
         fs = detect_sampling_rate(df)
 
     if fs is None:
@@ -394,8 +468,11 @@ def add_products(df,verbose=False,fs=None):
         df=add_tec_columns(df,fs=fs, pair="12")
     if f"cph1" in df.columns and f"cph3" in df.columns:
         df=add_tec_columns(df,fs=fs, pair="13")
-
-    
+    if verbose:
+        print("Computing detrended SNR")
+    for i in ['1','2','3']:
+        if f"snr{i}" in df.columns:
+            df=add_snr_columnsJM(df,i=i,fs=fs)
     if verbose:
         print("Computing products...")
 
@@ -408,6 +485,7 @@ def add_products(df,verbose=False,fs=None):
         cycleslip_col = f"cycleslips_cph{i}"
         edgegap_col = f"edgegap_mask_cph{i}"
         snr_col = f"snr{i}"
+        snr_new = f"snr{i}_new" #snr1_new
 
         if detrended_noclk_col in df.columns:
             agg_dict[f"sigma_phi_{i}"] = (detrended_noclk_col, compute_sigma_phi)
@@ -429,6 +507,7 @@ def add_products(df,verbose=False,fs=None):
 
         if snr_col in df.columns:
             agg_dict[f"s4_{i}"] = (snr_col, compute_s4)
+            agg_dict[f"s4_detrended_{i}"] = (snr_new, compute_s4) #this one shoyld be snr_dtrn and use the same func to comps4
             agg_dict[f"s4_corrected_{i}"] = (snr_col, compute_s4_corrected)
             agg_dict[f"tau_{i}"] = (
                 snr_col,
