@@ -94,10 +94,20 @@ def _nearest_station(
 
     nearest = stations[np.isclose(distances, minimum_distance)]
     if len(nearest) > 1:
-        codes = ", ".join(nearest["Code"].astype(str))
-        raise ValueError(
-            "coordinates match multiple station entries equally: " + codes
+        # Coordinate-only lookup is used for coordinate-encoded ScintPi data.
+        # A colocated standalone receiver (such as UTD's Septentrio) should
+        # not make an otherwise unique ScintPi coordinate match ambiguous.
+        scintpi_types = nearest["Type"].astype(str).str.upper().isin(
+            {"SC2", "SC3", "SC4"}
         )
+        scintpi_nearest = nearest[scintpi_types]
+        if len(scintpi_nearest) == 1:
+            nearest = scintpi_nearest
+        else:
+            codes = ", ".join(nearest["Code"].astype(str))
+            raise ValueError(
+                "coordinates match multiple station entries equally: " + codes
+            )
 
     return _station_dict(nearest.iloc[0])
 

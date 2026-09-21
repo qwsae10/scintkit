@@ -10,6 +10,11 @@ def test_shared_station_registry_is_loadable():
     assert "Station Location" in stations.columns
     assert "Code" in stations.columns
     assert len(stations) > 0
+    septentrio = stations.loc[stations["Code"] == "US-TX4"].iloc[0]
+    assert septentrio["Station Location"] == "Dallas Texas"
+    assert septentrio["Latitude"] == 32.992
+    assert septentrio["Longitude"] == -96.757
+    assert septentrio["Type"] == "SEPT"
 
 
 def test_load_targets_reads_sc4_prefix(tmp_path):
@@ -48,3 +53,28 @@ def test_scan_sc4_uses_prefixes_from_targets(monkeypatch):
     )
 
     assert targets[0]["valid_times"] == {pd.Timestamp("2026-07-01")}
+
+
+def test_scan_septentrio_files_parses_doy_and_ignores_invalid_files(monkeypatch):
+    targets = [{"code": "US-TX4", "valid_times": set()}]
+    paths = [
+        "/sept/CSS_1832.26_",
+        "/sept/CSS_1832.26_.ismr",
+        "/sept/CSS_1841.26_.ismr",
+        "/sept/CSS_0011.25_",
+        "/sept/CSS_3671.26_",
+        "/sept/CSS_183a.26_",
+        "/sept/CSS_183_F.ismr",
+    ]
+    monkeypatch.setattr(core.glob, "glob", lambda pattern: paths)
+
+    core.scan_septentrio_files(
+        targets,
+        pd.Timestamp("2026-07-02"),
+        base_dir="/sept",
+    )
+
+    assert targets[0]["valid_times"] == {
+        pd.Timestamp("2026-07-02"),
+        pd.Timestamp("2026-07-03"),
+    }

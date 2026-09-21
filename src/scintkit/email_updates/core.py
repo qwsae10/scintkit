@@ -158,6 +158,60 @@ def scan_sc4_files(plot_targets, cutoff, sc4_dict=None, base_dir='/mfs/io/groups
                         break
 
 
+def scan_septentrio_files(
+    plot_targets,
+    cutoff,
+    base_dir='/mfs/io/groups/uars/UTD_septentrio',
+    station_code='US-TX4',
+):
+    """Scan UTD Septentrio files named ``CSS_DDDN.YY_``.
+
+    ``DDD`` is the day of year, ``N`` is the session number, and ``YY`` is
+    the two-digit year. Both the receiver files and their ``.ismr`` products
+    count as evidence that data are present for that day.
+    """
+    print("Scanning UTD Septentrio files...")
+
+    matching_targets = [
+        target for target in plot_targets
+        if target['code'] == station_code
+    ]
+    if len(matching_targets) != 1:
+        raise ValueError(
+            f"expected exactly one Septentrio target with code {station_code!r}"
+        )
+    target = matching_targets[0]
+
+    pattern = re.compile(
+        r'^CSS_(?P<doy>\d{3})\d\.(?P<year>\d{2})_'
+        r'(?:\.ismr)?$',
+        re.IGNORECASE,
+    )
+    cutoff_date = cutoff.normalize()
+
+    for full_path in glob.glob(os.path.join(base_dir, 'CSS_*')):
+        match = pattern.match(os.path.basename(os.fspath(full_path)))
+        if match is None:
+            continue
+
+        year = 2000 + int(match.group('year'))
+        day_of_year = int(match.group('doy'))
+        time_val = pd.to_datetime(
+            f'{year:04d}{day_of_year:03d}',
+            format='%Y%j',
+            errors='coerce',
+        )
+        if (
+            pd.isna(time_val)
+            or time_val.year != year
+            or time_val.dayofyear != day_of_year
+            or time_val < cutoff_date
+        ):
+            continue
+
+        target['valid_times'].add(time_val.normalize())
+
+
 def checklvl3datamissing(lvl3file, thres=900):
     """Helper: checks percent missing from Level-3 HDF5 file."""
     try:

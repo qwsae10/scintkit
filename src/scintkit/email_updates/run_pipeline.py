@@ -6,6 +6,7 @@ from scintkit.email_updates import (
     load_targets,
     scan_legacy_files,
     scan_sc4_files,
+    scan_septentrio_files,
     generate_availability_plot,
     send_status_email,
 )
@@ -25,6 +26,7 @@ def main():
         targets = load_targets()  # uses the shared station registry by default
         scan_legacy_files(targets, cutoff)
         scan_sc4_files(targets, cutoff)
+        scan_septentrio_files(targets, cutoff)
 
         generate_availability_plot(targets, cutoff, now, out_png)
         send_status_email(image_path=out_png, now_date=now, to_list=email_recipients)

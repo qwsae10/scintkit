@@ -1,6 +1,6 @@
 # ScintKit Email Updates Module 📡
 
-`scintkit.email_updates` is a submodule of the `scintkit` package that automatically scans, plots, and reports the data availability of ScintPi (Scintillation Pi) ionospheric monitoring stations. It supports legacy ScintPi 2/3 formats as well as the newer ScintPi 4.
+`scintkit.email_updates` is a submodule of the `scintkit` package that automatically scans, plots, and reports the data availability of ScintPi (Scintillation Pi) ionospheric monitoring stations. It supports legacy ScintPi 2/3 formats, the newer ScintPi 4, and the UTD Septentrio receiver.
 
 ## Directory Structure
 
@@ -102,6 +102,7 @@ stations = load_station_codes()
 | `load_targets(csv_path=None)` | Load station targets from CSV (defaults to bundled CSV) |
 | `scan_legacy_files(targets, cutoff)` | Scan ScintPi 2/3 data files |
 | `scan_sc4_files(targets, cutoff)` | Scan ScintPi 4.0 data files using CSV prefixes |
+| `scan_septentrio_files(targets, cutoff)` | Scan UTD Septentrio `CSS_DDDN.YY_` files |
 | `generate_availability_plot(targets, cutoff, now, output_path)` | Generate availability PNG plot |
 | `send_status_email(image_path, now_date, to_list)` | Email the plot to recipients |
 | `checklvl3datamissing(lvl3file, thres=900)` | Check percent missing from Level-3 HDF5 file |
@@ -114,6 +115,7 @@ from scintkit.email_updates import (
     load_targets,
     scan_legacy_files,
     scan_sc4_files,
+    scan_septentrio_files,
     generate_availability_plot,
     send_status_email,
 )
@@ -124,6 +126,7 @@ cutoff = now - pd.DateOffset(months=3)
 targets = load_targets()
 scan_legacy_files(targets, cutoff)
 scan_sc4_files(targets, cutoff)
+scan_septentrio_files(targets, cutoff)
 
 generate_availability_plot(targets, cutoff, now, "availability.png")
 send_status_email("availability.png", now, ["recipient@example.com"])
@@ -131,6 +134,6 @@ send_status_email("availability.png", now, ["recipient@example.com"])
 
 This will:
 1. Load the station targets from the bundled CSV.
-2. Scan the file system for legacy and SC4 data.
+2. Scan the file system for legacy, SC4, and UTD Septentrio data.
 3. Generate an availability `.png` plot.
 4. Email the plot to the configured recipients.
