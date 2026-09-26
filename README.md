@@ -42,7 +42,7 @@ Clone with git:
 ```bash
 git clone https://github.com/qwsae10/scintkit.git
 cd scintkit
-````
+```
 
 Or download as a ZIP from GitHub and extract it.
 
