@@ -25,7 +25,9 @@ if not raw_files:
         "Start Jupyter from the repository root, or update data_dir."
     )
 
-lvl3_files = process(raw_files, mode='lvl3')
+output_dir = Path("output")  # lvl0 and lvl3 files are written here
+summary = process(raw_files, output_dir, mode="lvl3")
+lvl3_files = [p for p in summary["written"] if p.endswith("_lvl3.pq")]
 
 # %%
 

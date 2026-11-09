@@ -75,32 +75,40 @@ You can import and run core processing functions directly.
 ```python
 from scintkit.pipeline import process
 
-process("example.bin.zip")
+summary = process(["example.bin.zip"], "output")
 ```
 
 This will:
 
-1. convert raw data to parquet
-2. apply preprocessing
+1. convert the raw file to `output/example_lvl0.pq` (UTC times)
+2. decode signals, detect the sampling rate and fix receiver epochs
 3. compute derived products
-4. output lvl3 files
+4. write `output/example_lvl2.pq` (1 s) and `output/example_lvl3.pq` (1 min)
 
-Progress is reported through `logging`; call
-`logging.basicConfig(level=logging.INFO)` to see it.
+`summary` lists the files written and the inputs that failed or have an
+unsupported firmware (supported: v325, v326c, v326d, v326e, v326f). Column
+definitions are in `scintkit.schema.COLUMNS`. Progress is reported through
+`logging`; call `logging.basicConfig(level=logging.INFO)` to see it.
 
 ### Command line and Slurm arrays
 
-```bash
-# lvl2/lvl3 products; files are split across $SLURM_ARRAY_TASK_COUNT tasks
-scintkit-process products --data-dir /path/to/data --pattern "scintpi3_*.bin.zip" --mode both
+Outputs go to `<output>/<input folder name>/`, e.g. `/products/sc000/`.
+The command exits with status 1 if any file failed.
 
-# raw -> lvl0 Parquet, mirroring the input tree
-scintkit-process convert --pattern "/raw/*/*2024*.bin.zip" \
-    --input-root /raw --output-root /lvl0 --versions v324 v325 v326 --only-missing
+```bash
+# explicit files or globs
+scintkit-process files "/raw/sc000/scintpi3_2024*.bin.zip" --output /products --workers 2
+
+# this Slurm array task's share of a glob
+scintkit-process array --pattern "/raw/*/scintpi3_2024*.bin.zip" --output /products
+
+# raw files from the last day, skipping those already processed (daily cron)
+scintkit-process recent --archive /raw --output /products --days 1 --workers 2
 ```
 
 `--task-id`, `--n-tasks` and `--workers` default to `SLURM_ARRAY_TASK_ID`,
 `SLURM_ARRAY_TASK_COUNT` and `SLURM_CPUS_PER_TASK` (or 0, 1, 1 outside Slurm).
+A 4 h file needs about 20 GB of memory per worker.
 
 ### Identifying a station
 

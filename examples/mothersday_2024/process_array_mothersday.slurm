@@ -22,7 +22,8 @@ module load miniconda
 source /opt/ohpc/pub/unpackaged/apps/miniconda/4.12.0/etc/profile.d/conda.sh
 conda activate myenv
 
-python /home/igw180000/run_scintpi_array.py \
-    --data-dir /path/to/data \
-    --pattern "scintpi3_*.bin*" \
-    --mode both
+# One 4 h file needs ~20 GB, so one file at a time per task.
+scintkit-process array \
+    --pattern "/path/to/data/scintpi3_*.bin*" \
+    --output /path/to/output \
+    --mode both --workers 1
