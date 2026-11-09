@@ -463,6 +463,7 @@ def compute_features(
     ]
     frame.drop(columns=unneeded, inplace=True)
     frame = format_lvl0(frame)
+    frame["minbin"] = frame["datetime"].dt.floor("1min")
 
     if verbose:
         print("Computing S4 and valid sample counts")

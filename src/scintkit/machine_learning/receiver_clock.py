@@ -15,13 +15,8 @@ from dataclasses import asdict, dataclass
 import numpy as np
 import pandas as pd
 
-try:  # Support package imports and direct execution from this directory.
-    from .fast_common_signal import receiver_epoch_ids_fast
-except ImportError:  # pragma: no cover - direct-script fallback
-    from fast_common_signal import receiver_epoch_ids_fast
+from scintkit.timing import WEEK_NS, grid_times, receiver_epochs, unwrap_weeks
 
-
-WEEK_NS = 7 * 24 * 60 * 60 * 1_000_000_000
 NAT_INT = np.datetime64("NaT", "ns").astype("int64")
 
 
@@ -81,126 +76,6 @@ def _find_exact_duplicate_epochs(
     return duplicate
 
 
-def _unwrap_gps_weeks(epoch_times: np.ndarray) -> tuple[np.ndarray, int]:
-    rollover = np.diff(epoch_times) < -(WEEK_NS // 2)
-    rollover_number = np.r_[0, np.cumsum(rollover, dtype="int64")]
-    unwrapped = epoch_times + rollover_number * WEEK_NS
-    if np.any(np.diff(unwrapped) < 0):
-        where = np.flatnonzero(np.diff(unwrapped) < 0)[:5].tolist()
-        raise ValueError(
-            "timestamps still move backward after GPS-week unwrapping at "
-            f"receiver epochs {where}"
-        )
-    return unwrapped, int(rollover.sum())
-
-
-def _assign_regular_grid(
-    epoch_times: np.ndarray,
-    *,
-    sample_rate_hz: float,
-) -> np.ndarray:
-    """Select the closest strictly increasing sample-grid slot per epoch."""
-
-    if sample_rate_hz <= 0:
-        raise ValueError("sample_rate_hz must be positive")
-    period_float = 1_000_000_000 / sample_rate_hz
-    period_ns = int(round(period_float))
-    if not np.isclose(period_ns, period_float):
-        raise ValueError("sample rate must have an integer-nanosecond period")
-
-    # v326 float32 time-of-week values can be 31.25 ms from the true time.
-    tolerance_ns = max(int(round(0.625 * period_ns)) + 1_000, period_ns // 2)
-    lower = np.floor_divide(epoch_times, period_ns)
-    candidates = np.column_stack([lower, lower + 1]).astype("int64")
-    residuals = np.abs(epoch_times[:, None] - candidates * np.int64(period_ns))
-    valid = residuals <= tolerance_ns
-    if np.any(~valid.any(axis=1)):
-        bad = np.flatnonzero(~valid.any(axis=1))[:5].tolist()
-        raise ValueError(f"no feasible {sample_rate_hz:g} Hz grid slot at {bad}")
-
-    count = len(epoch_times)
-    unreachable = np.iinfo("int64").max
-    back = np.full((count, 2), -1, dtype="int8")
-    missing_previous = np.full(2, unreachable, dtype="int64")
-    error_previous = np.full(2, np.inf)
-    for state in range(2):
-        if valid[0, state]:
-            missing_previous[state] = 0
-            error_previous[state] = float(residuals[0, state]) ** 2
-
-    for epoch in range(1, count):
-        missing_current = np.full(2, unreachable, dtype="int64")
-        error_current = np.full(2, np.inf)
-        for state in range(2):
-            if not valid[epoch, state]:
-                continue
-            for previous_state in range(2):
-                if missing_previous[previous_state] == unreachable:
-                    continue
-                step = candidates[epoch, state] - candidates[epoch - 1, previous_state]
-                if step < 1:
-                    continue
-                proposed = (
-                    missing_previous[previous_state] + step - 1,
-                    error_previous[previous_state]
-                    + float(residuals[epoch, state]) ** 2,
-                )
-                current = (missing_current[state], error_current[state])
-                if proposed < current:
-                    missing_current[state], error_current[state] = proposed
-                    back[epoch, state] = previous_state
-        if np.all(missing_current == unreachable):
-            raise ValueError(
-                "no strictly increasing sample-grid path at receiver epoch "
-                f"{epoch:,}"
-            )
-        missing_previous = missing_current
-        error_previous = error_current
-
-    final_state = min(
-        (state for state in range(2) if missing_previous[state] != unreachable),
-        key=lambda state: (missing_previous[state], error_previous[state]),
-    )
-    states = np.empty(count, dtype="int8")
-    states[-1] = final_state
-    for epoch in range(count - 1, 0, -1):
-        states[epoch - 1] = back[epoch, states[epoch]]
-    slots = candidates[np.arange(count), states]
-    return slots * np.int64(period_ns)
-
-
-def _assign_sample_order_grid(
-    epoch_times: np.ndarray,
-    *,
-    sample_rate_hz: float,
-) -> np.ndarray:
-    """Return a strictly increasing grid when raw timestamps are ambiguous.
-
-    Each observed epoch is first rounded to the nearest 20 Hz grid slot.  Row
-    order is authoritative: when an observed slot repeats or moves backward,
-    it is advanced to one slot after the preceding epoch.  Forward timestamp
-    jumps are retained, so trustworthy coarse gaps and minute boundaries still
-    anchor the internal clock.  This fallback is used only when the stricter
-    bounded-residual grid solver cannot find a path.
-    """
-
-    if sample_rate_hz <= 0:
-        raise ValueError("sample_rate_hz must be positive")
-    period_float = 1_000_000_000 / sample_rate_hz
-    period_ns = int(round(period_float))
-    if not np.isclose(period_ns, period_float):
-        raise ValueError("sample rate must have an integer-nanosecond period")
-
-    observed_slots = np.rint(epoch_times / period_ns).astype("int64")
-    epoch_number = np.arange(len(observed_slots), dtype="int64")
-    # A strictly increasing integer sequence has nondecreasing (slot - index).
-    # Cumulative maximum is the vectorized form of max(observed, previous + 1).
-    slots = np.maximum.accumulate(observed_slots - epoch_number) + epoch_number
-    if np.any(np.diff(slots) < 1):
-        raise AssertionError("sample-order grid construction was not increasing")
-    return slots * np.int64(period_ns)
-
-
 def reconstruct_receiver_clock(
     frame: pd.DataFrame,
     *,
@@ -221,11 +96,9 @@ def reconstruct_receiver_clock(
     if np.any(raw_ns == NAT_INT):
         raise ValueError(f"{time_column!r} contains invalid timestamps")
 
-    epoch_ids = receiver_epoch_ids_fast(
-        frame,
-        time_column=time_column,
-        satellite_columns=satellite_columns,
-    )
+    if time_column != "datetime" or tuple(satellite_columns) != ("cons", "svid"):
+        raise ValueError("only datetime/cons/svid columns are supported")
+    epoch_ids = receiver_epochs(frame.reset_index(drop=True))
     starts, ends = _epoch_bounds(epoch_ids)
     epoch_times = raw_ns[starts]
     duplicate_epoch = _find_exact_duplicate_epochs(
@@ -238,24 +111,10 @@ def reconstruct_receiver_clock(
     keep_epoch = ~duplicate_epoch
     keep_row = keep_epoch[epoch_ids]
 
-    unwrapped, rollover_count = _unwrap_gps_weeks(epoch_times[keep_epoch])
-    sample_order_fallback = False
-    try:
-        fixed_epoch_times = _assign_regular_grid(
-            unwrapped,
-            sample_rate_hz=sample_rate_hz,
-        )
-    except ValueError as error:
-        if not (
-            str(error).startswith("no feasible ")
-            or str(error).startswith("no strictly increasing sample-grid path")
-        ):
-            raise
-        fixed_epoch_times = _assign_sample_order_grid(
-            unwrapped,
-            sample_rate_hz=sample_rate_hz,
-        )
-        sample_order_fallback = True
+    kept_times = epoch_times[keep_epoch]
+    rollover_count = int(np.sum(np.diff(kept_times) < -(WEEK_NS // 2)))
+    unwrapped = unwrap_weeks(kept_times)
+    fixed_epoch_times, sample_order_fallback = grid_times(unwrapped, sample_rate_hz)
 
     fixed_by_original_epoch = np.full(len(starts), NAT_INT, dtype="int64")
     fixed_by_original_epoch[keep_epoch] = fixed_epoch_times

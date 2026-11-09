@@ -1,64 +1,146 @@
-"""End-to-end processing: raw/lvl0 files -> lvl2 (1 s) and lvl3 (1 min) products.
+"""End-to-end processing: raw/lvl0 files -> lvl0, lvl2 (1 s) and lvl3 (1 min) Parquet files.
 
-Also the ``scintkit-process`` command line, which splits work across Slurm
-array tasks.
+Also the ``scintkit-process`` command line (file list, Slurm array task, recent files).
 """
 
 import argparse
 import glob
 import logging
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import sys
+from datetime import datetime, timedelta, timezone
 from multiprocessing import Pool
-from pathlib import Path
 
-import pandas as pd
-
-from scintkit.filenames import firmware_version
-from scintkit.formatting import make_1min, make_1sec
-from scintkit.products import compute_products, merge_products
-from scintkit.reading import build_output_path, convert_to_lvl0
+from scintkit import schema
+from scintkit.filenames import output_path, start_time
+from scintkit.products import assemble, compute_products
+from scintkit.reading import UnsupportedFirmware, read_lvl0, to_lvl0
 
 logger = logging.getLogger(__name__)
 
-RAW_SUFFIXES = (".bin", ".bin.zip")
+RAW_SUFFIXES = (".bin", ".bin.zip", ".dat", ".dat.zip")
 LVL0_SUFFIXES = ("_lvl0.pq", "_lvl0.parquet")
+LEVELS = {"lvl0": [], "lvl2": ["lvl2"], "lvl3": ["lvl3"], "both": ["lvl2", "lvl3"]}
 
 
-def process(flist, mode="both", fs=50):
-    """Write lvl3 (``mode="lvl3"``), lvl2 (``"lvl2"``) or both for each file; return their paths.
+def _out_dir(path, output_dir, mirror):
+    return os.path.join(output_dir, os.path.basename(os.path.dirname(os.path.abspath(path)))) if mirror else output_dir
 
-    Accepts ``.bin``, ``.bin.zip`` and ``*_lvl0.pq`` files (other names are
-    skipped). Outputs are written next to the lvl0 file. A file that fails is
-    logged and skipped. ``fs`` is the sampling rate in Hz (None = detect).
+
+def process_file(path, output_dir, mode="both", fs=None, overwrite=False):
+    """Write the outputs of one raw or lvl0 file into ``output_dir``; return the paths written.
+
+    ``mode`` is "lvl0", "lvl2", "lvl3" or "both" (lvl2 and lvl3); raw input
+    also gets its lvl0 file. Existing outputs are kept unless ``overwrite``.
+    ``fs`` (Hz) is detected from the data when None.
     """
-    if isinstance(flist, (str, os.PathLike)):
-        flist = [flist]
-    flist = [f for f in flist if str(f).lower().endswith(RAW_SUFFIXES + LVL0_SUFFIXES)]
+    path = os.fspath(path)
+    targets = {level: output_path(path, output_dir, level) for level in LEVELS[mode]}
+    is_lvl0 = path.lower().endswith(LVL0_SUFFIXES)
+    lvl0 = path if is_lvl0 else output_path(path, output_dir, "lvl0")
+    wanted = list(targets.values()) + ([] if is_lvl0 else [lvl0])
+    if not overwrite and all(os.path.exists(p) for p in wanted):
+        logger.info("outputs exist, skipping %s", path)
+        return []
 
-    outputs = []
-    for fname in flist:
-        try:
-            logger.info("Processing %s", fname)
-            if str(fname).lower().endswith(LVL0_SUFFIXES):
-                pq_fname = fname
-            else:
-                pq_fname = convert_to_lvl0(fname)
+    written = []
+    if not is_lvl0 and (overwrite or not os.path.exists(lvl0)):
+        written.append(to_lvl0(path, output_dir, overwrite=True))
+    if not targets:
+        return written
 
-            # Products are merged onto the reduced lvl2/lvl3 rows, not the full-rate frame.
-            frame, minute = compute_products(pd.read_parquet(pq_fname), fs=fs)
+    df, meta = read_lvl0(lvl0)
+    frame, minute, fs = compute_products(df, fs=fs)
+    del df
+    file_meta = schema.file_metadata(meta.get("source_file", path), meta.get("firmware"), fs,
+                                     meta["leap_seconds"])
+    for level, out in targets.items():
+        schema.write(assemble(frame, minute, "1min" if level == "lvl3" else "1s"), out, file_meta)
+        logger.info("wrote %s", out)
+        written.append(out)
+    return written
 
-            if mode in ("lvl3", "both"):
-                outname = str(pq_fname).replace("_lvl0", "_lvl3")
-                merge_products(make_1min(frame), minute).to_parquet(outname)
-                outputs.append(outname)
-            if mode in ("lvl2", "both"):
-                outname = str(pq_fname).replace("_lvl0", "_lvl2")
-                merge_products(make_1sec(frame), minute).to_parquet(outname)
-                outputs.append(outname)
-        except Exception:
-            logger.exception("Error processing %s", fname)
-    return outputs
+
+def _run(task):
+    """Process one file; return ``(path, status, written paths or reason)`` without raising."""
+    path, output_dir, mode, fs, overwrite = task
+    try:
+        written = process_file(path, output_dir, mode=mode, fs=fs, overwrite=overwrite)
+        return path, "ok" if written else "skipped", written
+    except UnsupportedFirmware as error:
+        logger.warning("unsupported: %s", error)
+        return path, "unsupported", str(error)
+    except Exception as error:
+        logger.exception("failed: %s", path)
+        return path, "failed", f"{type(error).__name__}: {error}"
+
+
+def _summarise(results):
+    summary = {"written": [], "skipped": [], "failed": [], "unsupported": []}
+    for path, status, detail in results:
+        if status == "ok":
+            summary["written"].extend(detail)
+        elif status == "skipped":
+            summary["skipped"].append(path)
+        else:
+            summary[status].append((path, detail))
+    n_ok = len(results) - sum(len(summary[k]) for k in ("skipped", "failed", "unsupported"))
+    logger.info("%d ok, %d skipped, %d failed, %d unsupported", n_ok, len(summary["skipped"]),
+                len(summary["failed"]), len(summary["unsupported"]))
+    for path, reason in summary["failed"] + summary["unsupported"]:
+        logger.info("  %s: %s", os.path.basename(path), reason)
+    return summary
+
+
+def _tasks(files, output_dir, mode, fs, overwrite, mirror):
+    if isinstance(files, (str, os.PathLike)):
+        files = [files]
+    return [(os.fspath(f), _out_dir(f, os.fspath(output_dir), mirror), mode, fs, overwrite) for f in files]
+
+
+def process(files, output_dir, mode="both", fs=None, overwrite=False, mirror=False):
+    """Process files one after another; return a summary dict.
+
+    The summary has ``written`` (paths), ``skipped`` (inputs whose outputs
+    exist), and ``failed``/``unsupported`` as ``(input, reason)`` pairs. With
+    ``mirror`` outputs go to ``output_dir/<input's folder name>/``.
+    """
+    return _summarise([_run(t) for t in _tasks(files, output_dir, mode, fs, overwrite, mirror)])
+
+
+def process_parallel(files, output_dir, n_workers=4, mode="both", fs=None, overwrite=False, mirror=False):
+    """:func:`process` with one file per task on ``n_workers`` processes; a failure never stops the pool.
+
+    A 4 h 20 Hz file needs about 20 GB of memory, so size ``n_workers`` to the machine.
+    """
+    tasks = _tasks(files, output_dir, mode, fs, overwrite, mirror)
+    with Pool(n_workers, maxtasksperchild=1) as pool:
+        return _summarise(list(pool.imap_unordered(_run, tasks)))
+
+
+def find_recent_files(archive_root, days=1, now=None):
+    """Raw files in ``archive_root/<station>/`` whose file-name start time is within the last ``days`` days.
+
+    ``now`` is a naive UTC datetime (default: the current time).
+    """
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    since = now - timedelta(days=days)
+    found = []
+    for path in glob.glob(os.path.join(os.fspath(archive_root), "*", "*")):
+        start = start_time(path)
+        if path.lower().endswith(RAW_SUFFIXES) and start is not None and since <= start <= now:
+            found.append(path)
+    return sorted(found)
+
+
+def process_recent(archive_root, output_root, days=1, n_workers=4, mode="both"):
+    """Process the raw files of the last ``days`` days into ``output_root/<station>/``, skipping done ones.
+
+    Meant for a daily cron job; returns the :func:`process` summary.
+    """
+    files = find_recent_files(archive_root, days=days)
+    logger.info("%d raw files in the last %g days under %s", len(files), days, archive_root)
+    return process_parallel(files, output_root, n_workers=n_workers, mode=mode, mirror=True)
 
 
 def split_evenly(items, n):
@@ -73,129 +155,65 @@ def split_evenly(items, n):
     return chunks
 
 
-def process_parallel(flist, n_workers=4, mode="both"):
-    """Run :func:`process` over ``flist`` split across ``n_workers`` processes."""
-    if isinstance(flist, (str, os.PathLike)):
-        flist = [flist]
-    chunks = [c for c in split_evenly(flist, max(n_workers, 1)) if c]
-
-    outputs = []
-    with ProcessPoolExecutor(max_workers=n_workers) as executor:
-        futures = [executor.submit(process, chunk, mode) for chunk in chunks]
-        for future in as_completed(futures):
-            try:
-                outputs.extend(future.result())
-            except Exception:
-                logger.exception("Worker failed")
-    return outputs
+def _expand(patterns):
+    files = []
+    for pattern in patterns:
+        files.extend(sorted(glob.glob(pattern)) or [pattern])
+    return files
 
 
-def _convert_one(args):
-    input_file, kwargs = args
-    try:
-        return convert_to_lvl0(input_file, **kwargs)
-    except Exception:
-        logger.exception("Error converting %s", input_file)
-        return None
+def _run_files(args):
+    return process_parallel(_expand(args.files), args.output, n_workers=args.workers, mode=args.mode,
+                            fs=args.fs, overwrite=args.overwrite, mirror=True)
 
 
-def convert_files(flist, input_root, output_root, n_workers=1, temp_root=None,
-                  compression_level=6, overwrite=False):
-    """Convert raw files to lvl0 Parquet, mirroring ``input_root`` into ``output_root``.
-
-    Returns the paths written (failed files are logged and left out).
-    """
-    kwargs = dict(input_root=input_root, output_root=output_root, temp_root=temp_root,
-                  compression_level=compression_level, overwrite=overwrite)
-    jobs = [(f, kwargs) for f in flist]
-    if n_workers == 1:
-        results = [_convert_one(job) for job in jobs]
-    else:
-        with Pool(n_workers) as pool:
-            results = pool.map(_convert_one, jobs)
-    return [r for r in results if r is not None]
-
-
-def find_missing_inputs(pattern, input_root, output_root, versions=None):
-    """Raw files matching ``pattern`` that have no converted counterpart in ``output_root``."""
-    missing = []
-    for f in glob.glob(pattern):
-        if versions is not None and firmware_version(f) not in versions:
-            continue
-        if not os.path.exists(build_output_path(f, input_root, output_root, output_suffix=".pq")):
-            missing.append(f)
-    return sorted(missing)
-
-
-def _array_task_files(files, args):
+def _run_array(args):
+    files = sorted(glob.glob(args.pattern))
     if not 0 <= args.task_id < args.n_tasks:
-        raise ValueError(f"task id must be in [0, {args.n_tasks - 1}], got {args.task_id}")
+        raise SystemExit(f"task id must be in [0, {args.n_tasks - 1}], got {args.task_id}")
     mine = split_evenly(files, args.n_tasks)[args.task_id]
     logger.info("task %d/%d: %d of %d files", args.task_id, args.n_tasks, len(mine), len(files))
-    return mine
+    return process_parallel(mine, args.output, n_workers=args.workers, mode=args.mode,
+                            fs=args.fs, overwrite=args.overwrite, mirror=True)
 
 
-def _run_products(args):
-    files = sorted(str(f) for f in args.data_dir.glob(args.pattern))
-    if not files:
-        raise FileNotFoundError(f"No files found in {args.data_dir} matching {args.pattern}")
-    outputs = process_parallel(_array_task_files(files, args), n_workers=args.workers, mode=args.mode)
-    for f in outputs:
-        logger.info("wrote %s", f)
-
-
-def _run_convert(args):
-    versions = set(args.versions) if args.versions else None
-    if args.only_missing:
-        files = find_missing_inputs(args.pattern, args.input_root, args.output_root, versions)
-    else:
-        files = sorted(f for f in glob.glob(args.pattern)
-                       if versions is None or firmware_version(f) in versions)
-    convert_files(
-        _array_task_files(files, args),
-        input_root=args.input_root,
-        output_root=args.output_root,
-        n_workers=args.workers,
-        temp_root=args.temp_root,
-        compression_level=args.compression_level,
-        overwrite=args.overwrite,
-    )
+def _run_recent(args):
+    return process_recent(args.archive, args.output, days=args.days, n_workers=args.workers, mode=args.mode)
 
 
 def main(argv=None):
-    """Entry point for ``scintkit-process``."""
+    """Entry point for ``scintkit-process``; exits 1 if any file failed."""
     env = os.environ.get
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--output", required=True,
+                        help="output root; files go to <output>/<input folder name>/")
+    common.add_argument("--workers", type=int, default=int(env("SLURM_CPUS_PER_TASK", 1)),
+                        help="parallel files (default: $SLURM_CPUS_PER_TASK or 1); ~20 GB each")
+    common.add_argument("--mode", default="both", choices=list(LEVELS))
+    common.add_argument("--fs", type=float, help="sampling rate in Hz (default: detect)")
+    common.add_argument("--overwrite", action="store_true")
+
     parser = argparse.ArgumentParser(prog="scintkit-process", description=__doc__)
-    array = argparse.ArgumentParser(add_help=False)
-    array.add_argument("--task-id", type=int, default=int(env("SLURM_ARRAY_TASK_ID", 0)),
-                       help="array task index (default: $SLURM_ARRAY_TASK_ID or 0)")
-    array.add_argument("--n-tasks", type=int, default=int(env("SLURM_ARRAY_TASK_COUNT", 1)),
-                       help="number of array tasks (default: $SLURM_ARRAY_TASK_COUNT or 1)")
-    array.add_argument("--workers", type=int, default=int(env("SLURM_CPUS_PER_TASK", 1)),
-                       help="local processes per task (default: $SLURM_CPUS_PER_TASK or 1)")
     commands = parser.add_subparsers(dest="command", required=True)
+    files = commands.add_parser("files", parents=[common], help="process the given files or globs")
+    files.add_argument("files", nargs="+")
+    files.set_defaults(run=_run_files)
 
-    products = commands.add_parser("products", parents=[array],
-                                   help="make lvl2/lvl3 products from raw or lvl0 files")
-    products.add_argument("--data-dir", required=True, type=Path)
-    products.add_argument("--pattern", required=True, help="glob pattern inside --data-dir")
-    products.add_argument("--mode", default="both", choices=["lvl2", "lvl3", "both"])
-    products.set_defaults(run=_run_products)
+    array = commands.add_parser("array", parents=[common], help="process this Slurm array task's share")
+    array.add_argument("--pattern", required=True, help="glob of raw or lvl0 files")
+    array.add_argument("--task-id", type=int, default=int(env("SLURM_ARRAY_TASK_ID", 0)))
+    array.add_argument("--n-tasks", type=int, default=int(env("SLURM_ARRAY_TASK_COUNT", 1)))
+    array.set_defaults(run=_run_array)
 
-    convert = commands.add_parser("convert", parents=[array], help="convert raw files to lvl0 Parquet")
-    convert.add_argument("--pattern", required=True, help="glob pattern for raw files")
-    convert.add_argument("--input-root", required=True)
-    convert.add_argument("--output-root", required=True)
-    convert.add_argument("--versions", nargs="+", help="only these firmware versions, e.g. v326")
-    convert.add_argument("--only-missing", action="store_true", help="skip files already converted")
-    convert.add_argument("--temp-root", help="scratch directory (default: system temp)")
-    convert.add_argument("--compression-level", type=int, default=9)
-    convert.add_argument("--overwrite", action="store_true")
-    convert.set_defaults(run=_run_convert)
+    recent = commands.add_parser("recent", parents=[common], help="process recent files of an archive")
+    recent.add_argument("--archive", required=True, help="archive root with one folder per station")
+    recent.add_argument("--days", type=float, default=1)
+    recent.set_defaults(run=_run_recent)
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    args.run(args)
+    summary = args.run(args)
+    sys.exit(1 if summary["failed"] else 0)
 
 
 if __name__ == "__main__":

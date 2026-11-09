@@ -31,6 +31,7 @@ tests/**/*.png
 !tests/fixtures/
 !tests/fixtures/**/*.pq
 !tests/fixtures/**/*.parquet
+!tests/fixtures/**/*.bin.zip
 
 # Package data
 !src/scintkit/data/station_scintpi_codes.csv

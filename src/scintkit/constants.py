@@ -4,75 +4,60 @@ from datetime import datetime
 
 # --- Receiver encodings -----------------------------------------------------
 
-INVALID_SVID = 255  # receiver placeholder for an untracked channel
+# Firmware tags (from the file name) that the readers understand.
+SUPPORTED_FIRMWARE = ("v325", "v326c", "v326d", "v326e", "v326f")
 
-# Constellation codes written by ScintPi 3 firmware.
-NUMERIC_CONSTELLATION = {0: "GPS", 1: "SBS", 2: "GAL", 3: "BDS", 6: "GLO"}
+INVALID_SVID = 255  # GLONASS satellite with unknown slot; rows are dropped
 
-CONSTELLATION_PREFIX = {
-    "GPS": "G",
-    "BDS": "C",
-    "GAL": "E",
-    "GLO": "R",
-    "QZSS": "J",
-    "IRNSS": "I",
-    "SBAS": "S",
-    "SBS": "S",
+# Constellation codes (u-blox gnssId) and RINEX satellite prefixes.
+CONSTELLATIONS = {0: "GPS", 1: "SBAS", 2: "GAL", 3: "BDS", 5: "QZSS", 6: "GLO"}
+RINEX_PREFIX = {"GPS": "G", "SBAS": "S", "GAL": "E", "BDS": "C", "QZSS": "J", "GLO": "R"}
+# Subtracted from svid to get the RINEX number (SBAS PRN 131 -> S31, QZSS 194 -> J02).
+RINEX_SVID_OFFSET = {"SBAS": 100, "QZSS": 192}
+
+# (constellation, first svid, last svid, channel-1 signal, MHz, channel-2 signal, MHz).
+# Measured for v325 and v326c-f on 26 files, 2021-2026. No match = channel never valid.
+# BeiDou-3 (svid >= 19) channel 2 is junk; SBAS has no channel 2; GLONASS MHz come from k.
+SIGNALS = (
+    ("GPS", 1, 32, "GPS_L1CA", 1575.42, "GPS_L2C", 1227.60),
+    ("SBAS", 120, 158, "SBAS_L1CA", 1575.42, None, None),
+    ("GAL", 1, 36, "GAL_E1", 1575.42, "GAL_E5b", 1207.14),
+    ("BDS", 1, 18, "BDS_B1I", 1561.098, "BDS_B2I", 1207.14),
+    ("BDS", 19, 63, "BDS_B1I", 1561.098, None, None),
+    ("QZSS", 193, 202, "QZS_L1CA", 1575.42, "QZS_L2C", 1227.60),
+    ("GLO", 1, 27, "GLO_L1OF", None, "GLO_L2OF", None),
+)
+
+# GLONASS frequency channel k per slot; slots 25-27 measured 2022-2026 only.
+GLONASS_K = {
+    1: 1, 2: -4, 3: 5, 4: 6, 5: 1, 6: -4, 7: 5, 8: 6, 9: -2, 10: -7, 11: 0, 12: -1,
+    13: -2, 14: -7, 15: 0, 16: -1, 17: 4, 18: -3, 19: 3, 20: 2, 21: 4, 22: -3, 23: 3, 24: 2,
+    25: -5, 26: -6, 27: -5,
 }
-GLONASS_PREFIX = CONSTELLATION_PREFIX["GLO"]
+GLONASS_L1_MHZ, GLONASS_L1_STEP_MHZ = 1602.0, 0.5625
+GLONASS_L2_MHZ, GLONASS_L2_STEP_MHZ = 1246.0, 0.4375
 
-# Signal tracked on receiver channels 1, 2 and 3 (ScintPi 3 files carry no
-# signal columns).
-SIGNALS_BY_CONSTELLATION = {
-    "GPS": ("GPS_L1CA", "GPS_L2C", "GPS_L5"),
-    "GLO": ("GLO_L1CA", "GLO_L2C", "GLO_L3"),
-    "GAL": ("GAL_L1BC", "GAL_E5b", "GAL_E5b"),
-    "BDS": ("BDS_B1I", "BDS_B2I", "BDS_B3I"),
-    "QZSS": ("QZS_L1CA", "QZS_L2C", "QZS_L5"),
-}
-
-FREQUENCY_MHZ_BY_SIGNAL = {
-    "GPS_L1CA": 1575.42,
-    "GLO_L1CA": 1602,
-    "GEO_L1": 1575.42,
-    "QZS_L1CA": 1575.42,
-    "GAL_L1BC": 1575.42,
-    "GAL_E1": 1575.42,
-    "BDS_B1I": 1561.098,
-    "IRNSS_L5": 1176.45,
-    "GPS_L2C": 1227.60,
-    "GLO_L2C": 1246.00,
-    "GLO_L2CA": 1246.60,
-    "QZS_L2C": 1227.60,
-    "GAL_E5a": 1176.45,
-    "SBAS_L5": 1176.45,
-    "BDS_B2I": 1207.14,
-    "GEO_L5": 1176.45,
-    "GPS_L5": 1176.45,
-    "QZS_L5": 1176.45,
-    "GAL_E5b": 1207.14,
-    "BDS_B3I": 1268.52,
-    "GPS_L2PY": 1227.60,
-    "GPS_L1P": 1575.42,
-    "GLO_L1P": 1602.00,
-    "GLO_L2P": 1246.0,
-    "GAL_E5": 1191.795,
-    "GAL_E6BC": 1278.75,
-    "GLO_L3": 1202.025,
-}
 L1_FREQUENCY_MHZ = 1575.42
+
+PSEUDORANGE_MIN_M, PSEUDORANGE_MAX_M = 1.8e7, 4.5e7  # plausible GNSS ranges
 
 # --- lvl0 conversion --------------------------------------------------------
 
 GPS_EPOCH = datetime(1980, 1, 6)
-LVL0_DROPPED_COLUMNS = ("sats", "pst1", "pst2", "rst1", "rst2", "lck1", "lck2")
-LVL0_COMPRESSION = "brotli"
+DEFAULT_LEAP_SECONDS = 18  # GPS - UTC since 2017; used when a file does not say
+V326_HEADER_FORMAT = "@fBbiBBBBBBddddi"  # towe, leap, ..., GPS week; padded to one record
+LVL0_DROPPED_COLUMNS = (
+    "sats", "pst1", "pst2", "pst3", "rst1", "rst2", "rst3", "lck1", "lck2",
+    "snr3", "cph3", "rng3", "leap",
+)
+COMPRESSION = "brotli"
 
 # --- Sampling ---------------------------------------------------------------
 
-# Samples per satellite per minute that identify a 10, 20, 40 or 50 Hz file.
-SAMPLES_PER_MINUTE = (600, 1200, 2400, 3000)
-SAMPLES_PER_MINUTE_TOLERANCE = 10
+# The modal samples per satellite-second must cover this share of satellite-seconds.
+MIN_MODAL_FRACTION = 0.5
+# A reconstructed epoch further than this from its raw timestamp is not trusted.
+MAX_CLOCK_CORRECTION_S = 1.0
 
 # --- Phase detrending -------------------------------------------------------
 
@@ -96,8 +81,9 @@ TEC_MAX_GAP = "5min"  # a longer gap starts a new levelling segment
 
 SNR_DETREND_WINDOW = "10s"  # centred moving average removed from SNR
 DETRENDED_SNR_OFFSET_DB = 40  # added back so detrended SNR stays positive
-MIN_TAU_SAMPLES = 1000
+MIN_TAU_SECONDS = 50  # of valid SNR per minute needed for tau
 MIN_UNIQUE_SNR = 2
+TAU_CORRELATION_LEVEL = 0.5  # tau is the lag where the autocorrelation drops below this
 
 # --- Quality flags ----------------------------------------------------------
 

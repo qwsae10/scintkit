@@ -5,9 +5,10 @@ import pandas as pd
 
 from scintkit.constants import (
     DETRENDED_SNR_OFFSET_DB,
-    MIN_TAU_SAMPLES,
+    MIN_TAU_SECONDS,
     MIN_UNIQUE_SNR,
     SNR_DETREND_WINDOW,
+    TAU_CORRELATION_LEVEL,
 )
 
 
@@ -59,18 +60,16 @@ def compute_s4_corrected(snr):
 
 
 def compute_tau(snr, fs):
-    """Decorrelation time in seconds from the SNR autocorrelation; NaN for short or flat input."""
+    """Decorrelation time (s): the first lag at which the normalised autocorrelation of the
+    linear intensity 10**(snr/10) drops below 0.5.
+
+    NaN with fewer than MIN_TAU_SECONDS * fs samples, flat input, or no such lag.
+    """
     snr = snr.dropna()
-    if len(snr) < MIN_TAU_SAMPLES or snr.nunique() < MIN_UNIQUE_SNR:
+    if len(snr) < MIN_TAU_SECONDS * fs or snr.nunique() < MIN_UNIQUE_SNR:
         return np.nan
-
-    amp = snr.to_numpy(dtype=float)
-    amp = amp - np.nanmean(amp)
-    ac = np.correlate(amp, amp, mode="full")
-    ac = ac[len(ac) // 2:]
-
-    peak_idx = np.argmax(ac)
-    mask = np.where(ac > ac[peak_idx] * 0.5, ac, np.nan)
-    left = np.nanargmax(mask)
-    right = left + np.nanargmin(mask[left:])
-    return (right - peak_idx) * (1.0 / fs)
+    intensity = 10 ** (snr.to_numpy(dtype=float) / 10)
+    x = intensity - intensity.mean()
+    ac = np.correlate(x, x, mode="full")[len(x) - 1:]
+    below = np.flatnonzero(ac < TAU_CORRELATION_LEVEL * ac[0])
+    return below[0] / fs if len(below) else np.nan

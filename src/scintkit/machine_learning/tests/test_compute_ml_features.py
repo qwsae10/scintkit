@@ -28,7 +28,7 @@ from scintkit.machine_learning.compute_ml_features import (
 )
 from scintkit.machine_learning.receiver_clock import reconstruct_receiver_clock
 from scintkit.amplitude import compute_s4
-from scintkit.formatting import add_sigs, make_prn
+from scintkit.formatting import format_lvl0
 from scintkit.phase import repair_discontinuities_pos
 from scintkit.tec import _repair_tec_pair
 
@@ -300,35 +300,26 @@ def test_vectorized_minute_s4_matches_scalar_reference_and_gate() -> None:
     assert summary["s4_1"].gt(0.15).equals(reference["s4_1"].gt(0.15))
 
 
-def test_vectorized_format_mappings_match_previous_semantics() -> None:
+def test_format_lvl0_maps_codes_to_rinex_prn_and_signals() -> None:
     frame = pd.DataFrame(
         {
-            "cons": ["GPS", "GLO", "GAL", "BDS", "QZSS", "SBS"],
-            "svid": [1, 12, 3, 25, 7, 123],
+            "cons": [0, 6, 2, 3, 5, 1],
+            "svid": [1, 12, 3, 25, 194, 131],
+            **{f"{name}{i}": 1.0 for name in ("snr", "cph") for i in (1, 2)},
+            "rng1": 2e7,
+            "rng2": 2e7,
         }
     )
-    old_prn = (
-        frame["cons"].map(
-            {
-                "GPS": "G", "BDS": "C", "GAL": "E", "GLO": "R",
-                "QZSS": "J", "IRNSS": "I", "SBAS": "S", "SBS": "S",
-            }
-        )
-        + frame["svid"].astype(int).astype(str).str.zfill(2)
-    )
-    assert make_prn(frame).equals(old_prn)
-
-    formatted = add_sigs(frame.copy())
-    assert formatted["sig_1"].iloc[:5].tolist() == [
-        "GPS_L1CA", "GLO_L1CA", "GAL_L1BC", "BDS_B1I", "QZS_L1CA"
+    formatted = format_lvl0(frame)
+    assert formatted["prn"].tolist() == ["G01", "R12", "E03", "C25", "J02", "S31"]
+    assert formatted["sig_1"].tolist() == [
+        "GPS_L1CA", "GLO_L1OF", "GAL_E1", "BDS_B1I", "QZS_L1CA", "SBAS_L1CA"
     ]
-    assert formatted["sig_2"].iloc[:5].tolist() == [
-        "GPS_L2C", "GLO_L2C", "GAL_E5b", "BDS_B2I", "QZS_L2C"
+    assert formatted["sig_2"].tolist() == [
+        "GPS_L2C", "GLO_L2OF", "GAL_E5b", None, "QZS_L2C", None
     ]
-    assert pd.isna(formatted.loc[5, "sig_1"])
-    assert pd.isna(formatted.loc[5, "sig_2"])
-    assert formatted["freq_1"].iloc[:5].tolist() == [
-        1575.42, 1602.0, 1575.42, 1561.098, 1575.42
+    assert formatted["freq_1"].tolist() == [
+        1575.42, 1602 - 0.5625, 1575.42, 1561.098, 1575.42, 1575.42
     ]
 
 

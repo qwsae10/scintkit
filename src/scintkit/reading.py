@@ -1,181 +1,159 @@
-"""ScintPi binary readers and raw -> lvl0 Parquet conversion."""
+"""ScintPi binary readers, raw -> lvl0 Parquet conversion and lvl0 reading."""
 
 import logging
 import os
-import shutil
 import struct
-import tempfile
 import zipfile
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from scintkit.constants import GPS_EPOCH, INVALID_SVID, LVL0_COMPRESSION, LVL0_DROPPED_COLUMNS
-from scintkit.filenames import firmware_version
+from scintkit import schema
+from scintkit.constants import (
+    DEFAULT_LEAP_SECONDS,
+    GPS_EPOCH,
+    INVALID_SVID,
+    LVL0_DROPPED_COLUMNS,
+    SUPPORTED_FIRMWARE,
+    V326_HEADER_FORMAT,
+)
+from scintkit.filenames import firmware_version, output_path
+from scintkit.timing import detect_sampling_rate
 
 logger = logging.getLogger(__name__)
 
+V325_RECORD = np.dtype([
+    ('week', np.int32), ('towe', np.float32),
+    ('leap', np.uint8), ('cons', np.uint8), ('sats', np.uint8), ('svid', np.uint8),
+    ('elev', np.int8), ('azim', np.int32),
+    ('snr1', np.uint8), ('snr2', np.uint8), ('snr3', np.uint8),
+    ('pst1', np.uint8), ('pst2', np.uint8), ('pst3', np.uint8),
+    ('rst1', np.uint8), ('rst2', np.uint8), ('rst3', np.uint8),
+    ('cph1', np.float64), ('cph2', np.float64), ('cph3', np.float64),
+    ('rng1', np.float64), ('rng2', np.float64), ('rng3', np.float64),
+    ('lon', np.float32), ('lat', np.float32), ('hei', np.float32),
+], align=True)
 
-def readv324(path):
-    """Read a v324 whitespace-separated text log."""
-    cols2read = [0, 1, 3, 4, 5, 6, 7, 8, 9, 11, 13, 15]
-    colnames = ['week', 'towe', 'cons', 'svid', 'elev', 'azim',
-                'snr1', 'snr2', 'cph1', 'cph2', 'rng1', 'rng2']
-    df = pd.read_csv(path, sep=r'\s+', header=None, usecols=cols2read)
-    df.columns = colnames
+V326_RECORD = np.dtype([
+    ('towe', np.float32), ('cons', np.uint8), ('sats', np.uint8), ('svid', np.uint8),
+    ('elev', np.int8), ('azim', np.int32),
+    ('snr1', np.uint8), ('snr2', np.uint8),
+    ('pst1', np.uint8), ('pst2', np.uint8), ('rst1', np.uint8), ('rst2', np.uint8),
+    ('cph1', np.float64), ('cph2', np.float64), ('rng1', np.float64), ('rng2', np.float64),
+    ('lck1', np.int32), ('lck2', np.int32),
+], align=True)
+
+
+class UnsupportedFirmware(ValueError):
+    """The file's firmware version has no reader."""
+
+
+def _records(buf, dtype, offset=0):
+    return pd.DataFrame(np.frombuffer(buf, dtype, count=(len(buf) - offset) // dtype.itemsize,
+                                      offset=offset))
+
+
+def readv325(buf):
+    """v325 records (96 bytes each, no header) -> ``(frame, leap seconds)``."""
+    df = _records(buf, V325_RECORD)
+    leap = int(np.bincount(df["leap"]).argmax()) if len(df) else 0
+    return df, leap
+
+
+def readv326(buf):
+    """v326c-f: one 64-byte header record (towe, leap, ..., GPS week), then 64-byte records."""
+    header = struct.unpack(V326_HEADER_FORMAT, buf[:struct.calcsize(V326_HEADER_FORMAT)])
+    df = _records(buf, V326_RECORD, offset=V326_RECORD.itemsize)
+    df["week"] = header[-1]
+    return df, header[1]
+
+
+READERS = {"v325": readv325, **{v: readv326 for v in SUPPORTED_FIRMWARE if v.startswith("v326")}}
+
+
+def _leap_or_default(leap, name):
+    if leap:
+        return int(leap)
+    logger.warning("%s: no leap-second count, assuming %d s", name, DEFAULT_LEAP_SECONDS)
+    return DEFAULT_LEAP_SECONDS
+
+
+def normalise_geometry(df):
+    """Elevation/azimuth as float32 degrees; unknown geometry (elev outside ±90, azim outside 0-360) -> NaN."""
+    elev = df["elev"].astype(np.float32)
+    azim = df["azim"].astype(np.float32)
+    unknown = ~elev.between(-90, 90) | ~azim.between(0, 360)
+    df["elev"] = elev.mask(unknown)
+    df["azim"] = azim.mask(unknown)
     return df
 
 
-def readv325(path):
-    """Read a v325 binary file (three signals, receiver position)."""
-    dt = np.dtype([
-        ('week', np.int32), ('towe', np.float32),
-        ('leap', np.uint8), ('cons', np.uint8),
-        ('sats', np.uint8), ('svid', np.uint8),
-        ('elev', np.int8), ('azim', np.int32),
-        ('snr1', np.uint8), ('snr2', np.uint8),
-        ('snr3', np.uint8), ('pst1', np.uint8),
-        ('pst2', np.uint8), ('pst3', np.uint8),
-        ('rst1', np.uint8), ('rst2', np.uint8),
-        ('rst3', np.uint8), ('cph1', np.float64),
-        ('cph2', np.float64), ('cph3', np.float64),
-        ('rng1', np.float64), ('rng2', np.float64),
-        ('rng3', np.float64), ('lon', np.float32),
-        ('lat', np.float32), ('hei', np.float32),
-    ], align=True)
-    arr = np.fromfile(path, dtype=dt)
-    return pd.DataFrame.from_records(arr)
+def read_raw(path):
+    """Raw ``.bin``/``.bin.zip`` file -> ``(frame, leap seconds)``; ``datetime`` is UTC.
 
-
-def readv326(path):
-    """Read a v326 binary file; the GPS week is stored once in the header."""
-    rec_dt = np.dtype([
-        ('towe', np.float32), ('cons', np.uint8),
-        ('sats', np.uint8), ('svid', np.uint8),
-        ('elev', np.int8), ('azim', np.int32),
-        ('snr1', np.uint8), ('snr2', np.uint8),
-        ('pst1', np.uint8), ('pst2', np.uint8),
-        ('rst1', np.uint8), ('rst2', np.uint8),
-        ('cph1', np.float64), ('cph2', np.float64),
-        ('rng1', np.float64), ('rng2', np.float64),
-        ('lck1', np.int32), ('lck2', np.int32),
-    ], align=True)
-    header_size = 60
-    records_offset = 64 * 2  # the header occupies the first two records
-    with open(path, 'rb') as f:
-        header = struct.unpack('@fBbiBBBBBBddddi', f.read(header_size))
-    week = header[-1]
-    df = pd.DataFrame.from_records(np.fromfile(path, dtype=rec_dt, offset=records_offset))
-    df['week'] = week
-    return df
-
-
-READERS = {
-    "v324": readv324,
-    "v325": readv325,
-    "v326": readv326,
-}
-
-
-def read_binary_file(bin_file, version):
-    """Raw receiver records for a firmware version such as ``"v326"``."""
-    reader = READERS.get(version)
-    if reader is None:
-        raise ValueError(f"unsupported version: {version}")
-    return reader(bin_file)
-
-
-def gpsweek_tow_to_datetime(df):
-    """Replace ``week``/``towe`` with a ``datetime`` column (GPS time scale)."""
-    df["datetime"] = (
-        GPS_EPOCH
-        + pd.to_timedelta(df["week"].astype(int), unit="W")
-        + pd.to_timedelta(df["towe"].astype(float), unit="s")
-    )
-    return df.drop(columns=["week", "towe"])
-
-
-def drop_unnecessary_columns(df):
-    """Drop receiver status columns and untracked channels; shrink angle dtypes."""
-    df = df.drop(columns=list(LVL0_DROPPED_COLUMNS), errors='ignore')
-    df = df[df.svid != INVALID_SVID]
-    df["elev"] = df["elev"].astype("uint8")
-    df["azim"] = df["azim"].astype("uint16")
-    return df
-
-
-def build_output_path(input_file, input_root, output_root, output_suffix=".pq"):
-    """Mirror ``input_file``'s path below ``input_root`` into ``output_root``."""
-    rel = os.path.relpath(input_file, input_root)
-    if rel.endswith(".bin.zip"):
-        rel = rel[:-8]
-    elif rel.endswith(".bin"):
-        rel = rel[:-4]
-    else:
-        rel = os.path.splitext(rel)[0]
-    return os.path.join(output_root, rel + output_suffix)
-
-
-def convert_to_lvl0(
-    input_file,
-    input_root=None,
-    output_root=None,
-    temp_root=None,
-    compression_level=6,
-    overwrite=False,
-):
-    """Convert a raw ``.bin``/``.bin.zip`` file to ``*_lvl0.pq`` and return its path.
-
-    Outputs go next to the input unless ``input_root``/``output_root`` are given.
-    Work happens in a scratch directory under ``temp_root`` (system default if None).
+    Raises UnsupportedFirmware unless the name carries one of SUPPORTED_FIRMWARE.
     """
-    input_file = os.fspath(input_file)
-    input_dir = os.path.dirname(os.path.abspath(input_file))
-    output_file = build_output_path(
-        input_file,
-        os.fspath(input_root) if input_root is not None else input_dir,
-        os.fspath(output_root) if output_root is not None else input_dir,
-        output_suffix="_lvl0.pq",
-    )
-    if os.path.exists(output_file) and not overwrite:
-        logger.info("skip exists: %s", output_file)
-        return output_file
-
-    version = firmware_version(input_file)
-    if version is None:
-        raise ValueError(f"could not determine version from filename: {input_file}")
-
-    with tempfile.TemporaryDirectory(prefix="scintpi_", dir=temp_root) as local_tmpdir:
-        local_input = os.path.join(local_tmpdir, os.path.basename(input_file))
-        logger.debug("copy: %s -> %s", input_file, local_input)
-        shutil.copy2(input_file, local_input)
-
-        if local_input.endswith(".bin.zip"):
-            with zipfile.ZipFile(local_input, "r") as zf:
-                zf.extractall(local_tmpdir)
-            local_bin = local_input[:-4]
-            if not os.path.exists(local_bin):
-                raise FileNotFoundError(f"extracted .bin not found: {local_bin}")
-        elif local_input.endswith(".bin"):
-            local_bin = local_input
-        else:
-            raise ValueError(f"expected .bin or .bin.zip file: {input_file}")
-
-        logger.info("read: %s (%s)", input_file, version)
-        df = read_binary_file(local_bin, version)
-        df = gpsweek_tow_to_datetime(df)
-        df = drop_unnecessary_columns(df)
-
-        local_pq = str(Path(local_bin).with_suffix(".pq"))
-        df.to_parquet(
-            local_pq,
-            compression=LVL0_COMPRESSION,
-            compression_level=compression_level,
-            index=False,
+    path = os.fspath(path)
+    firmware = firmware_version(path)
+    if firmware not in READERS:
+        raise UnsupportedFirmware(
+            f"firmware {firmware} is not supported (supported: {', '.join(SUPPORTED_FIRMWARE)}): "
+            f"{os.path.basename(path)}"
         )
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        shutil.move(local_pq, output_file)
+    if path.endswith(".zip"):
+        with zipfile.ZipFile(path) as zf:
+            buf = zf.read(zf.namelist()[0])
+    else:
+        with open(path, "rb") as f:
+            buf = f.read()
 
-    logger.info("wrote: %s", output_file)
-    return output_file
+    df, leap = READERS[firmware](buf)
+    leap = _leap_or_default(leap, os.path.basename(path))
+    df = df[~((df["cons"] == 6) & (df["svid"] == INVALID_SVID))]
+    df = df.assign(datetime=(
+        GPS_EPOCH
+        + pd.to_timedelta(df["week"].astype(np.int64), unit="W")
+        + pd.to_timedelta(df["towe"].astype(np.float64), unit="s")
+        - pd.Timedelta(seconds=leap)
+    ))
+    df = df.drop(columns=["week", "towe", *LVL0_DROPPED_COLUMNS], errors="ignore")
+    return normalise_geometry(df).reset_index(drop=True), leap
+
+
+def to_lvl0(path, out_dir, overwrite=False, compression_level=6):
+    """Convert a raw file to ``out_dir/<stem>_lvl0.pq`` (UTC, with file metadata); return its path.
+
+    The reader is picked from the firmware tag in the file name.
+    """
+    out = output_path(path, out_dir, "lvl0")
+    if os.path.exists(out) and not overwrite:
+        logger.info("lvl0 exists: %s", out)
+        return out
+    logger.info("read: %s", path)
+    df, leap = read_raw(path)
+    meta = schema.file_metadata(path, firmware_version(path), detect_sampling_rate(df), leap)
+    schema.write(df, out, meta, compression_level=compression_level)
+    logger.info("wrote: %s", out)
+    return out
+
+
+def read_lvl0(path):
+    """lvl0 Parquet -> ``(frame, metadata)`` with UTC ``datetime`` and signed, NaN-for-unknown geometry.
+
+    Files without a ``time_scale`` entry predate it: they are in GPS time and
+    their elevation was cast to uint8 (165 = -91, 216-255 = -40..-1).
+    """
+    meta = schema.read_metadata(path)
+    df = pd.read_parquet(path)
+    if "time_scale" in meta:
+        return df, meta
+
+    name = os.path.basename(os.fspath(path))
+    leap = _leap_or_default(int(df["leap"].mode()[0]) if "leap" in df else 0, name)
+    df["datetime"] -= pd.Timedelta(seconds=leap)
+    if df["elev"].dtype == np.uint8:
+        df["elev"] = df["elev"].astype(np.int16).where(df["elev"] < 128, df["elev"].astype(np.int16) - 256)
+    df = normalise_geometry(df.drop(columns=list(LVL0_DROPPED_COLUMNS), errors="ignore"))
+    meta.update(firmware=firmware_version(path), time_scale="UTC", leap_seconds=str(leap),
+                source_file=name)
+    return df, meta

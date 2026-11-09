@@ -7,21 +7,22 @@ import os
 import re
 from datetime import datetime
 
-_VERSION = re.compile(r"_v(\d+)")
+_VERSION = re.compile(r"_(v\d+[a-z]*)(?=[_.]|$)", re.IGNORECASE)
 _START_TIME = re.compile(r"_(\d{8})_(\d{4})_")
 _COORDINATES = re.compile(
     r"_([0-9]+(?:\.[0-9]+)?)([EW])_([0-9]+(?:\.[0-9]+)?)([NS])",
     re.IGNORECASE,
 )
+_SUFFIXES = ("_lvl0.parquet", "_lvl0.pq", ".bin.zip", ".dat.zip", ".bin", ".dat")
 
 # Older receivers wrote decimal degrees multiplied by this factor.
 LEGACY_COORDINATE_SCALE = 10_000
 
 
 def firmware_version(filename: str | os.PathLike) -> str | None:
-    """Firmware version such as ``"v326"``, or None if the name has none."""
-    match = _VERSION.search(os.fspath(filename))
-    return f"v{match.group(1)}" if match else None
+    """Full firmware tag such as ``"v326f"``, or None if the name has none."""
+    match = _VERSION.search(os.path.basename(os.fspath(filename)))
+    return match.group(1).lower() if match else None
 
 
 def start_time(filename: str | os.PathLike) -> datetime | None:
@@ -50,3 +51,13 @@ def coordinates(filename: str | os.PathLike) -> tuple[float, float] | None:
     if match.group(4).upper() == "S":
         latitude = -latitude
     return latitude, longitude
+
+
+def output_path(filename: str | os.PathLike, out_dir: str | os.PathLike, level: str) -> str:
+    """``out_dir/<input stem>_<level>.pq``, e.g. level ``"lvl3"``."""
+    name = os.path.basename(os.fspath(filename))
+    for suffix in _SUFFIXES:
+        if name.lower().endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    return os.path.join(os.fspath(out_dir), f"{name}_{level}.pq")

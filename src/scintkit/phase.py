@@ -16,7 +16,6 @@ from scintkit.constants import (
     MAX_SLIP_FRACTION,
     REPAIR_WINDOW_S,
 )
-from scintkit.formatting import detect_sampling_rate
 
 logger = logging.getLogger(__name__)
 
@@ -92,22 +91,17 @@ def make_edge_gap_mask(time, phase, fs, gap_seconds=EDGE_GAP_S, pad_seconds=EDGE
     return mask
 
 
-def highpass_phase(df, in_col="cph1", out_col="detrended_cph1", tr=CYCLE_SLIP_THRESHOLD_RAD,
-                   fs=None, f_N=HIGHPASS_CUTOFF_HZ):
+def highpass_phase(df, fs, in_col="cph1", out_col="detrended_cph1", tr=CYCLE_SLIP_THRESHOLD_RAD,
+                   f_N=HIGHPASS_CUTOFF_HZ):
     """Add slip-repaired, high-pass filtered phase in radians, plus slip and edge masks.
 
-    Writes ``out_col``, ``cycleslips_*`` and ``edgegap_mask_*``. Phase is all NaN
-    when the sampling rate is unknown.
+    Writes ``out_col``, ``cycleslips_*`` and ``edgegap_mask_*``; ``fs`` in Hz.
     """
     slip_col = out_col.replace("detrended", "cycleslips")
     mask_col = out_col.replace("detrended", "edgegap_mask")
     df[out_col] = np.nan
     df[slip_col] = False
     df[mask_col] = False
-    if fs is None:
-        fs = detect_sampling_rate(df)
-    if fs is None:
-        return df
 
     phase_all = df[in_col].to_numpy(dtype=float)
     time_all = df["datetime"].to_numpy()
@@ -137,55 +131,38 @@ def highpass_phase(df, in_col="cph1", out_col="detrended_cph1", tr=CYCLE_SLIP_TH
     return df
 
 
-def highpass_all_phases(df, fs=None, tr=CYCLE_SLIP_THRESHOLD_RAD):
-    """Detrend every ``cph1..3`` column; the slip threshold scales with frequency."""
-    for i in range(1, 4):
-        if f"cph{i}" not in df.columns:
-            continue
-        freq_col = f"freq_{i}"
-        scaled_tr = tr * df[freq_col].median() / L1_FREQUENCY_MHZ if freq_col in df.columns else tr
-        df = highpass_phase(df, in_col=f"cph{i}", out_col=f"detrended_cph{i}", tr=scaled_tr, fs=fs)
+def highpass_all_phases(df, fs, tr=CYCLE_SLIP_THRESHOLD_RAD):
+    """Detrend ``cph1`` and ``cph2``; the slip threshold scales with frequency."""
+    for i in (1, 2):
+        scaled_tr = tr * df[f"freq_{i}"].median() / L1_FREQUENCY_MHZ
+        df = highpass_phase(df, fs, in_col=f"cph{i}", out_col=f"detrended_cph{i}", tr=scaled_tr)
     return df
 
 
 def estimate_clock(df, elev_mask=CLOCK_ELEVATION_MASK_DEG):
-    """Add ``clock_term``: per-epoch median of detrended phase / frequency (rad/MHz).
+    """Add ``clock_term``: per receiver epoch, median of detrended phase / frequency (rad/MHz).
 
-    Uses only satellites above ``elev_mask`` degrees; also adds ``v1..3``.
+    Uses satellites above ``elev_mask`` degrees and groups by ``epoch`` (see
+    timing.fix_epochs), not by timestamp.
     """
-    value_cols = []
-    for i in (1, 2, 3):
-        cph_col, freq_col = f"detrended_cph{i}", f"freq_{i}"
-        if cph_col in df.columns and freq_col in df.columns:
-            df[f"v{i}"] = df[cph_col] / df[freq_col]
-            value_cols.append(f"v{i}")
-
-    if not value_cols:
-        df["clock_term"] = np.nan
-        return df
-
-    clock_df = df[(df["elev"] > elev_mask) & (df["elev"] < 90)]
-    median_curve = (
-        clock_df.melt(id_vars="datetime", value_vars=value_cols)
-        .groupby("datetime")["value"]
-        .median()
-    )
-    df["clock_term"] = df["datetime"].map(median_curve)
+    use = ((df["elev"] > elev_mask) & (df["elev"] < 90)).to_numpy()
+    epoch = df["epoch"].to_numpy()[use]
+    values = [(df[f"detrended_cph{i}"] / df[f"freq_{i}"]).to_numpy()[use] for i in (1, 2)]
+    curve = pd.Series(np.concatenate(values), index=np.tile(epoch, 2)).dropna()
+    curve = curve.groupby(level=0).median()
+    df["clock_term"] = curve.reindex(df["epoch"].to_numpy()).to_numpy()
     return df
 
 
 def clock_correction(df):
-    """Add ``detrended_noclk_cph1..3``: detrended phase minus the receiver clock (rad)."""
-    for i in (1, 2, 3):
-        cph_col, freq_col = f"detrended_cph{i}", f"freq_{i}"
-        if cph_col in df.columns and "clock_term" in df.columns and freq_col in df.columns:
-            df[f"detrended_noclk_cph{i}"] = df[cph_col] - df["clock_term"] * df[freq_col]
+    """Add ``detrended_noclk_cph1/2``: detrended phase minus the receiver clock (rad)."""
+    for i in (1, 2):
+        df[f"detrended_noclk_cph{i}"] = df[f"detrended_cph{i}"] - df["clock_term"] * df[f"freq_{i}"]
     return df
 
 
-def process_phases(df, fs=None, tr=CYCLE_SLIP_THRESHOLD_RAD):
-    """Detrend all phases and remove the common receiver clock."""
-    fs = detect_sampling_rate(df) if fs is None else fs
+def process_phases(df, fs, tr=CYCLE_SLIP_THRESHOLD_RAD):
+    """Detrend both phases at ``fs`` Hz and remove the common receiver clock."""
     df = highpass_all_phases(df, fs, tr)
     df = estimate_clock(df)
     return clock_correction(df)

@@ -8,8 +8,11 @@ from matplotlib.ticker import MaxNLocator
 MIN_VALID_S4 = 300  # satellites with fewer valid s4_1 rows are not plotted
 
 
-def individual_summary_plot(df, timecol='secbin', elmask=10):
-    """One panel per satellite: TEC and elevation on top, flagged S4 and sigma-phi below."""
+def individual_summary_plot(df, timecol='datetime', elmask=10):
+    """One panel per satellite: TEC and elevation on top, S4 and sigma-phi (flag 0, above ``elmask`` deg) below.
+
+    Returns ``(fig, axes)``; the caller shows or saves the figure.
+    """
     df = df.sort_values(timecol)
     valid = df.groupby("prn")["s4_1"].apply(lambda x: x.notna().sum())
     prns = valid[valid > MIN_VALID_S4].index.tolist()
@@ -37,7 +40,7 @@ def individual_summary_plot(df, timecol='secbin', elmask=10):
         ax1b.tick_params(axis="y", colors="green")
         ax1b.set_ylim(0, 90)
 
-        above_mask = (g['elev'] > elmask) & (g['elev'] < 91)
+        above_mask = g['elev'] > elmask
         for product in ("sigma_phi", "s4"):
             for i in ("1", "2"):
                 good = (g[f"{product}_quality_flag_{i}"] == 0) & above_mask
@@ -64,5 +67,4 @@ def individual_summary_plot(df, timecol='secbin', elmask=10):
     day = df[timecol].dt.floor("D").median().strftime("%Y-%m-%d")
     fig.suptitle(f"ScintPi Data - {day}", fontsize=12, y=0.95)
     fig.tight_layout()
-    plt.show()
     return fig, axes
