@@ -29,7 +29,7 @@ dev = [
 ]
 
 [project.scripts]
-scintkit-ml-features = "scintkit.machine_learning.compute_ml_features:main"
+scintkit-ml-features = "scintkit.machine_learning.features:main"
 scintkit-process = "scintkit.pipeline:main"
 
 [tool.setuptools.dynamic]
