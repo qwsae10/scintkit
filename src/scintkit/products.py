@@ -7,7 +7,7 @@ import numpy as np
 from scintkit import schema
 from scintkit.amplitude import add_detrended_snr, compute_s4, compute_s4_corrected, compute_tau
 from scintkit.constants import S4_MIN_SAMPLE_FRACTION, SIGMA_PHI_MAX_DROPPED_SAMPLES
-from scintkit.formatting import first_samples, format_lvl0
+from scintkit.formatting import channels, first_samples, format_lvl0
 from scintkit.phase import process_phases
 from scintkit.tec import add_tec_columns
 from scintkit.timing import detect_sampling_rate, fix_epochs
@@ -38,7 +38,7 @@ def _add_quality_flags(minute, fs):
     """
     expected = fs * 60
     is_glonass = minute["prn"].str.startswith("R")
-    for i in (1, 2):
+    for i in (i for i in (1, 2, 3) if f"n_s4_{i}" in minute.columns):
         sigma_phi_bad = (
             minute.pop(f"_edge_gap_{i}")
             | minute[f"n_sigphi_{i}"].lt(expected - SIGMA_PHI_MAX_DROPPED_SAMPLES)
@@ -50,14 +50,15 @@ def _add_quality_flags(minute, fs):
 
 
 def minute_products(df, fs):
-    """One row per satellite and UTC minute (``datetime`` = minute start) with the channel 1/2 products.
+    """One row per satellite and UTC minute (``datetime`` = minute start) with the per-channel products.
 
     ``df`` is the full-rate frame after process_phases; ``fs`` in Hz. See docs/lvl3.md.
     """
-    for i in (1, 2):
+    chans = channels(df)
+    for i in chans:
         df = add_detrended_snr(df, i=i)
     agg = {}
-    for i in (1, 2):
+    for i in chans:
         phase, snr = f"detrended_noclk_cph{i}", f"snr{i}"
         agg[f"s4_{i}"] = (snr, compute_s4)
         agg[f"s4_corrected_{i}"] = (snr, compute_s4_corrected)
@@ -76,7 +77,7 @@ def compute_products(df, fs=None):
     """lvl0 frame -> ``(frame, minute, fs)``.
 
     ``frame`` is the full-rate frame (receiver epochs fixed, signals decoded,
-    detrended phase and TEC added), ``minute`` the per-minute products, and
+    detrended phase and TEC added; channel 3 and TEC pair 13 when present), ``minute`` the per-minute products, and
     ``fs`` the sampling rate in Hz (detected from the data when None).
     """
     fs = detect_sampling_rate(df) if fs is None else fs
@@ -85,14 +86,16 @@ def compute_products(df, fs=None):
     logger.info("processing phases")
     df = process_phases(df, fs)
     logger.info("computing TEC")
-    df = add_tec_columns(df, pair="12", fs=fs, copy=False)
+    for pair in ("12", "13") if 3 in channels(df) else ("12",):
+        df = add_tec_columns(df, pair=pair, fs=fs, copy=False)
     logger.info("computing minute products")
     return df, minute_products(df, fs), fs
 
 
 def assemble(frame, minute, interval):
     """lvl3 (``interval="1min"``) or lvl2 (``"1s"``) table: first sample per satellite and interval
-    plus that satellite-minute's products, conformed to schema.LVL3_COLUMNS or schema.COLUMNS.
+    plus that satellite-minute's products, conformed to schema.LVL3_COLUMNS or schema.COLUMNS
+    (channel-3 columns only when the frame has them).
 
     For lvl3, ``minute`` must carry the classification columns (see machine_learning.classify).
     """

@@ -7,12 +7,10 @@ azimuth from the SatVisibility1 block when the receiver logged it.
 
 import logging
 import os
-import re
 import shlex
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -30,13 +28,10 @@ from scintkit.constants import (
     RINEX_PREFIX,
     RINEX_SVID_OFFSET,
 )
-from scintkit.filenames import output_path
+from scintkit.filenames import output_path, sbf_name
 from scintkit.stations import load_station_codes
 
 logger = logging.getLogger(__name__)
-
-# SBF file name: <4-char station prefix><day of year><hour a-x><minute>.<yy>_
-SBF_NAME = re.compile(r"^([a-z]{2}[0-9]{2})([0-9]{3})([a-x])([0-9]{2})\.([0-9]{2})_$", re.IGNORECASE)
 
 BIN2ASC_ENV = "SCINTKIT_BIN2ASC"  # command, e.g. "bin2asc" or "rxtools_exec.sh bin2asc"
 # Blocks exported next to the measurements; missing ones are simply not written.
@@ -77,13 +72,7 @@ GLONASS_FREQNR_OFFSET = 8  # SBF FreqNr = k + 8
 
 def parse_sc4_name(path):
     """``(station prefix, start time)`` from an SBF file name, or None. Time is GPS (receiver) time."""
-    match = SBF_NAME.match(os.path.basename(os.fspath(path)))
-    if match is None:
-        return None
-    prefix, doy, hour, minute, yy = match.groups()
-    start = datetime(2000 + int(yy), 1, 1) + timedelta(
-        days=int(doy) - 1, hours=ord(hour.lower()) - ord("a"), minutes=int(minute))
-    return prefix.lower(), start
+    return sbf_name(path)
 
 
 def sc4_prefixes():

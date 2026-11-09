@@ -22,6 +22,13 @@ from scintkit.constants import (
 logger = logging.getLogger(__name__)
 
 SATELLITE_COLUMNS = ["cons", "prn", "sig_1", "freq_1", "sig_2", "freq_2"]
+SIGNAL_COLUMNS = ["sig_1", "freq_1", "sig_2", "freq_2"]
+
+
+def channels(df):
+    """Receiver channels to process: (1, 2, 3) when the frame carries channel 3 (ScintPi 4), else (1, 2)."""
+    has_third = all(c in df.columns for c in ("snr3", "cph3", "rng3", "freq_3"))
+    return (1, 2, 3) if has_third else (1, 2)
 
 
 def satellite(code, svid):
@@ -41,9 +48,10 @@ def satellite(code, svid):
 def format_lvl0(df):
     """Add constellation names, RINEX ``prn``, ``sig_1/2`` and ``freq_1/2`` (MHz); blank absent channels.
 
-    A channel is absent in a row (snr, cph, rng -> NaN) when the satellite has no
-    such signal or any of its snr, cph, rng is 0; pseudoranges outside
-    1.8e7-4.5e7 m are NaN. Keeps row order; returns a fresh RangeIndex.
+    Signals and frequencies already in the file (ScintPi 4) are kept; otherwise
+    they come from the ScintPi 3 table. A channel is absent in a row (snr, cph,
+    rng -> NaN) when it has no signal or any of its snr, cph, rng is 0;
+    pseudoranges outside 1.8e7-4.5e7 m are NaN. Keeps row order; returns a fresh RangeIndex.
     """
     known = df["cons"].isin(list(CONSTELLATIONS))
     if not known.all():
@@ -55,10 +63,12 @@ def format_lvl0(df):
     table = pd.DataFrame([satellite(int(k // 1000), int(k % 1000)) for k in codes],
                          index=codes, columns=SATELLITE_COLUMNS)
     rows = table.reindex(key)
+    keep = SIGNAL_COLUMNS if "sig_1" in df.columns else []
     for column in SATELLITE_COLUMNS:
-        df[column] = rows[column].to_numpy()
+        if column not in keep:
+            df[column] = rows[column].to_numpy()
 
-    for i in (1, 2):
+    for i in channels(df):
         snr, cph, rng = (df[f"{name}{i}"] for name in ("snr", "cph", "rng"))
         absent = df[f"sig_{i}"].isna() | snr.eq(0) | cph.eq(0) | rng.eq(0)
         df[f"snr{i}"] = snr.astype(np.float32).mask(absent)

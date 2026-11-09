@@ -19,20 +19,27 @@ _KEYS = [
     ("svid", "uint8", "", "satellite id as written by the receiver"),
     ("sig_1", "string", "", "signal on receiver channel 1, e.g. GPS_L1CA"),
     ("sig_2", "string", "", "signal on receiver channel 2, e.g. GPS_L2C; empty if none"),
+    ("sig_3", "string", "", "signal on receiver channel 3 (ScintPi 4 only), e.g. GPS_L5; empty if none"),
     ("freq_1", "float64", "MHz", "carrier frequency of channel 1"),
     ("freq_2", "float64", "MHz", "carrier frequency of channel 2"),
+    ("freq_3", "float64", "MHz", "carrier frequency of channel 3 (ScintPi 4 only)"),
 ]
 _FIRST_SAMPLE = [
     ("snr1", "float32", "dB-Hz", "C/N0 of channel 1, first sample of the interval"),
     ("snr2", "float32", "dB-Hz", "C/N0 of channel 2, first sample of the interval"),
+    ("snr3", "float32", "dB-Hz", "C/N0 of channel 3, first sample of the interval"),
     ("cph1", "float64", "cycles", "carrier phase of channel 1, first sample of the interval"),
     ("cph2", "float64", "cycles", "carrier phase of channel 2, first sample of the interval"),
+    ("cph3", "float64", "cycles", "carrier phase of channel 3, first sample of the interval"),
     ("rng1", "float64", "m", "pseudorange of channel 1, first sample of the interval"),
     ("rng2", "float64", "m", "pseudorange of channel 2, first sample of the interval"),
+    ("rng3", "float64", "m", "pseudorange of channel 3, first sample of the interval"),
     ("elev", "float32", "deg", "elevation, first sample; NaN where the receiver had no orbit"),
     ("azim", "float32", "deg", "azimuth, first sample; NaN where the receiver had no orbit"),
     ("tec_cph12", "float64", "TECU", "carrier-phase slant TEC levelled to tec_rng12, first sample"),
     ("tec_rng12", "float64", "TECU", "pseudorange slant TEC (uncalibrated biases), first sample"),
+    ("tec_cph13", "float64", "TECU", "as tec_cph12 for channels 1 and 3, first sample"),
+    ("tec_rng13", "float64", "TECU", "as tec_rng12 for channels 1 and 3, first sample"),
 ]
 
 
@@ -61,14 +68,19 @@ _CLASSIFICATION = [
 ]
 
 # (name, dtype, unit, description) of every lvl2 column, in file order; lvl3 adds the classification.
-COLUMNS = _KEYS + _FIRST_SAMPLE + _channel_products(1) + _channel_products(2)
+COLUMNS = _KEYS + _FIRST_SAMPLE + _channel_products(1) + _channel_products(2) + _channel_products(3)
 LVL3_COLUMNS = COLUMNS + _CLASSIFICATION
-COLUMN_NAMES = [c[0] for c in COLUMNS]
-LVL3_COLUMN_NAMES = [c[0] for c in LVL3_COLUMNS]
+# Channel-3 columns are written only when the data have them (ScintPi 4).
+CHANNEL3_NAMES = {"sig_3", "freq_3", "snr3", "cph3", "rng3", "tec_cph13", "tec_rng13"} | {
+    c[0] for c in _channel_products(3)}
+# Column names of a two-channel (ScintPi 3) file.
+COLUMN_NAMES = [c[0] for c in COLUMNS if c[0] not in CHANNEL3_NAMES]
+LVL3_COLUMN_NAMES = [c[0] for c in LVL3_COLUMNS if c[0] not in CHANNEL3_NAMES]
 
 
 def conform(df, columns=COLUMNS):
-    """Exactly the ``columns`` (COLUMNS or LVL3_COLUMNS), in order and with their dtypes."""
+    """The ``columns`` (COLUMNS or LVL3_COLUMNS) in order with their dtypes; channel-3 ones only if in ``df``."""
+    columns = [c for c in columns if c[0] not in CHANNEL3_NAMES or c[0] in df.columns]
     return df[[c[0] for c in columns]].astype({name: dtype for name, dtype, _, _ in columns})
 
 

@@ -8,7 +8,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 
-from scintkit import schema
+from scintkit import sc4, schema
 from scintkit.constants import (
     DEFAULT_LEAP_SECONDS,
     GPS_EPOCH,
@@ -123,8 +123,11 @@ def read_raw(path):
 def to_lvl0(path, out_dir, overwrite=False, compression_level=6):
     """Convert a raw file to ``out_dir/<stem>_lvl0.pq`` (UTC, with file metadata); return its path.
 
-    The reader is picked from the firmware tag in the file name.
+    ScintPi 4 SBF files go to sc4.convert_sc4_to_lvl0 (needs RXTools); otherwise
+    the reader is picked from the firmware tag in the file name.
     """
+    if sc4.is_sc4_file(path):
+        return sc4.convert_sc4_to_lvl0(path, out_dir, overwrite=overwrite)
     out = output_path(path, out_dir, "lvl0")
     if os.path.exists(out) and not overwrite:
         logger.info("lvl0 exists: %s", out)

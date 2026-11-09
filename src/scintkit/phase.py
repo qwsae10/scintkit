@@ -17,6 +17,8 @@ from scintkit.constants import (
     REPAIR_WINDOW_S,
 )
 
+from scintkit.formatting import channels
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,37 +134,47 @@ def highpass_phase(df, fs, in_col="cph1", out_col="detrended_cph1", tr=CYCLE_SLI
 
 
 def highpass_all_phases(df, fs, tr=CYCLE_SLIP_THRESHOLD_RAD):
-    """Detrend ``cph1`` and ``cph2``; the slip threshold scales with frequency."""
-    for i in (1, 2):
+    """Detrend ``cph1``, ``cph2`` (and ``cph3`` if present); the slip threshold scales with frequency."""
+    for i in channels(df):
         scaled_tr = tr * df[f"freq_{i}"].median() / L1_FREQUENCY_MHZ
         df = highpass_phase(df, fs, in_col=f"cph{i}", out_col=f"detrended_cph{i}", tr=scaled_tr)
     return df
 
 
+def has_elevation(df):
+    """True when any row has a finite elevation."""
+    return bool(df["elev"].notna().any()) if "elev" in df.columns else False
+
+
 def estimate_clock(df, elev_mask=CLOCK_ELEVATION_MASK_DEG):
     """Add ``clock_term``: per receiver epoch, median of detrended phase / frequency (rad/MHz).
 
-    Uses satellites above ``elev_mask`` degrees and groups by ``epoch`` (see
-    timing.fix_epochs), not by timestamp.
+    Uses satellites above ``elev_mask`` degrees, or all satellites when the file
+    has no elevation at all, and groups by ``epoch`` (see timing.fix_epochs), not by timestamp.
     """
-    use = ((df["elev"] > elev_mask) & (df["elev"] < 90)).to_numpy()
+    if has_elevation(df):
+        use = ((df["elev"] > elev_mask) & (df["elev"] < 90)).to_numpy()
+    else:
+        logger.warning("no elevation in the file: receiver clock estimated from all satellites")
+        use = np.ones(len(df), dtype=bool)
     epoch = df["epoch"].to_numpy()[use]
-    values = [(df[f"detrended_cph{i}"] / df[f"freq_{i}"]).to_numpy()[use] for i in (1, 2)]
-    curve = pd.Series(np.concatenate(values), index=np.tile(epoch, 2)).dropna()
+    chans = channels(df)
+    values = [(df[f"detrended_cph{i}"] / df[f"freq_{i}"]).to_numpy()[use] for i in chans]
+    curve = pd.Series(np.concatenate(values), index=np.tile(epoch, len(chans))).dropna()
     curve = curve.groupby(level=0).median()
     df["clock_term"] = curve.reindex(df["epoch"].to_numpy()).to_numpy()
     return df
 
 
 def clock_correction(df):
-    """Add ``detrended_noclk_cph1/2``: detrended phase minus the receiver clock (rad)."""
-    for i in (1, 2):
+    """Add ``detrended_noclk_cph1/2(/3)``: detrended phase minus the receiver clock (rad)."""
+    for i in channels(df):
         df[f"detrended_noclk_cph{i}"] = df[f"detrended_cph{i}"] - df["clock_term"] * df[f"freq_{i}"]
     return df
 
 
 def process_phases(df, fs, tr=CYCLE_SLIP_THRESHOLD_RAD):
-    """Detrend both phases at ``fs`` Hz and remove the common receiver clock."""
+    """Detrend every channel's phase at ``fs`` Hz and remove the common receiver clock."""
     df = highpass_all_phases(df, fs, tr)
     df = estimate_clock(df)
     return clock_correction(df)

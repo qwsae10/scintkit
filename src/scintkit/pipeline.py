@@ -7,38 +7,57 @@ import argparse
 import glob
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from multiprocessing import Pool
 
 from scintkit import schema
-from scintkit.filenames import output_path, start_time
+from scintkit.filenames import is_lvl0_parquet, output_path, sbf_name, start_time
 from scintkit.machine_learning.classify import classify_minutes, unclassified
+from scintkit.phase import has_elevation
 from scintkit.products import assemble, compute_products
 from scintkit.reading import UnsupportedFirmware, read_lvl0, to_lvl0
 
 logger = logging.getLogger(__name__)
 
 RAW_SUFFIXES = (".bin", ".bin.zip", ".dat", ".dat.zip")
-LVL0_SUFFIXES = ("_lvl0.pq", "_lvl0.parquet")
 LEVELS = {"lvl0": [], "lvl2": ["lvl2"], "lvl3": ["lvl3"], "both": ["lvl2", "lvl3"]}
+DATED_FOLDER = re.compile(r"^\d{8}$")  # ScintPi 4 archive: <station>/<YYYYMMDD>/<SBF files>
+
+
+def is_raw(path):
+    """True for a raw receiver file: ScintPi 2/3 ``.bin``/``.dat`` (optionally zipped) or a ScintPi 4 SBF name."""
+    return os.fspath(path).lower().endswith(RAW_SUFFIXES) or sbf_name(path) is not None
 
 
 def _out_dir(path, output_dir, mirror):
-    return os.path.join(output_dir, os.path.basename(os.path.dirname(os.path.abspath(path)))) if mirror else output_dir
+    """``output_dir``, or with ``mirror`` ``output_dir/<input folder>`` (``<station>/<YYYYMMDD>`` for dated folders)."""
+    if not mirror:
+        return output_dir
+    folder = os.path.dirname(os.path.abspath(path))
+    parts = [os.path.basename(folder)]
+    if DATED_FOLDER.match(parts[0]):
+        parts.insert(0, os.path.basename(os.path.dirname(folder)))
+    return os.path.join(output_dir, *parts)
 
 
 def process_file(path, output_dir, mode="both", fs=None, overwrite=False, classify=True):
     """Write the outputs of one raw or lvl0 file into ``output_dir``; return the paths written.
 
+    Any ``.pq``/``.parquet`` input that is not an lvl2/lvl3 product is lvl0
+    (also older names without ``_lvl0``); lvl2/lvl3 inputs are skipped.
     ``mode`` is "lvl0", "lvl2", "lvl3" or "both" (lvl2 and lvl3); raw input
     also gets its lvl0 file. Existing outputs are kept unless ``overwrite``.
     ``fs`` (Hz) is detected from the data when None. With ``classify`` lvl3
     gets the signal class of gated minutes (20 Hz data and the ``ml`` extra).
     """
     path = os.fspath(path)
+    is_lvl0 = is_lvl0_parquet(path)
+    if not is_lvl0 and path.lower().endswith((".pq", ".parquet")):
+        logger.info("not an input (lvl2/lvl3 product), skipping %s", path)
+        return []
     targets = {level: output_path(path, output_dir, level) for level in LEVELS[mode]}
-    is_lvl0 = path.lower().endswith(LVL0_SUFFIXES)
     lvl0 = path if is_lvl0 else output_path(path, output_dir, "lvl0")
     wanted = list(targets.values()) + ([] if is_lvl0 else [lvl0])
     if not overwrite and all(os.path.exists(p) for p in wanted):
@@ -56,6 +75,7 @@ def process_file(path, output_dir, mode="both", fs=None, overwrite=False, classi
     del df
     file_meta = schema.file_metadata(meta.get("source_file", path), meta.get("firmware"), fs,
                                      meta["leap_seconds"])
+    file_meta["elevation_available"] = str(has_elevation(frame)).lower()
     ml_meta = {}
     if "lvl3" in targets:
         if classify:
@@ -130,22 +150,33 @@ def process_parallel(files, output_dir, n_workers=4, mode="both", fs=None, overw
 
 
 def find_recent_files(archive_root, days=1, now=None):
-    """Raw files in ``archive_root/<station>/`` whose file-name start time is within the last ``days`` days.
+    """Raw files whose file-name start time is within the last ``days`` days.
 
-    ``now`` is a naive UTC datetime (default: the current time).
+    Looks in ``archive_root/<station>/`` (ScintPi 2/3) and in the dated folders
+    ``archive_root/<station>/<YYYYMMDD>/`` that hold ScintPi 4 SBF files; only
+    dated folders within the window are listed. ``now`` is a naive UTC datetime
+    (default: the current time).
     """
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)
     since = now - timedelta(days=days)
+    root = os.fspath(archive_root)
+    candidates = glob.glob(os.path.join(root, "*", "*"))
+    # The folder date is the GPS day of the files; allow one day of slack on each side.
+    first, last = (since - timedelta(days=1)).strftime("%Y%m%d"), (now + timedelta(days=1)).strftime("%Y%m%d")
+    for folder in glob.glob(os.path.join(root, "*", "[0-9]" * 8)):
+        if os.path.isdir(folder) and first <= os.path.basename(folder) <= last:
+            candidates.extend(glob.glob(os.path.join(folder, "*")))
     found = []
-    for path in glob.glob(os.path.join(os.fspath(archive_root), "*", "*")):
+    for path in candidates:
         start = start_time(path)
-        if path.lower().endswith(RAW_SUFFIXES) and start is not None and since <= start <= now:
+        if is_raw(path) and os.path.isfile(path) and start is not None and since <= start <= now:
             found.append(path)
     return sorted(found)
 
 
 def process_recent(archive_root, output_root, days=1, n_workers=4, mode="both", classify=True):
-    """Process the raw files of the last ``days`` days into ``output_root/<station>/``, skipping done ones.
+    """Process the raw files of the last ``days`` days into ``output_root/<station>/`` (ScintPi 4:
+    ``<station>/<YYYYMMDD>/``), skipping done ones.
 
     Meant for a daily cron job; returns the :func:`process` summary.
     """
@@ -166,11 +197,19 @@ def split_evenly(items, n):
     return chunks
 
 
+def _inputs(files):
+    """Raw and lvl0 files among ``files`` (globs may also match e.g. the .txt files next to SBF files)."""
+    keep = [f for f in files if is_raw(f) or is_lvl0_parquet(f)]
+    if len(keep) < len(files):
+        logger.info("ignoring %d files that are neither raw nor lvl0", len(files) - len(keep))
+    return keep
+
+
 def _expand(patterns):
     files = []
     for pattern in patterns:
         files.extend(sorted(glob.glob(pattern)) or [pattern])
-    return files
+    return _inputs(files)
 
 
 def _run_files(args):
@@ -179,7 +218,7 @@ def _run_files(args):
 
 
 def _run_array(args):
-    files = sorted(glob.glob(args.pattern))
+    files = _inputs(sorted(glob.glob(args.pattern)))
     if not 0 <= args.task_id < args.n_tasks:
         raise SystemExit(f"task id must be in [0, {args.n_tasks - 1}], got {args.task_id}")
     mine = split_evenly(files, args.n_tasks)[args.task_id]
