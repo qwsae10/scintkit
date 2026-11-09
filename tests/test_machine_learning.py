@@ -1,10 +1,16 @@
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from scintkit import schema
+from scintkit.machine_learning import classify
 from scintkit.machine_learning.features import FEATURES, band_powers_db, compute_features, minute_grid
+from scintkit.pipeline import process_file
 from scintkit.products import compute_products
 
 FS = 20
@@ -51,6 +57,17 @@ def synthetic_lvl0(minutes=4, seed=7):
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = FIXTURES / "ml_features_golden.csv"  # old feature code (commit 9a34c65) on synthetic_lvl0()
+LVL0_10HZ = FIXTURES / "scintpi3_20241011_1200_96.7573W_32.9919N_v326f_lvl0.pq"
+MOTHERSDAY = Path(os.environ.get(
+    "SCINTKIT_MOTHERSDAY_TEST",
+    "/Users/isaac/Documents/ML_Analysis_2026/mothersday_ml_test_20240510_20240511_corrected.pq"))
+MOTHERSDAY_CONFUSION = [[32, 0, 9], [6, 15, 0], [1, 0, 19]]  # rows: true Multipath, RFI, Scintillation
+
+try:
+    import sklearn  # noqa: F401
+    HAVE_SKLEARN = True
+except ImportError:
+    HAVE_SKLEARN = False
 
 
 @pytest.fixture(scope="module")
@@ -87,3 +104,69 @@ def test_minute_grid_fills_small_gaps_and_rejects_sparse_minutes():
     np.testing.assert_allclose(filled, np.arange(1200.0))
     keep[600] = False
     assert minute_grid(time[keep], values[keep], 0) == (None, 1190)
+
+
+@pytest.mark.skipif(not HAVE_SKLEARN or not MOTHERSDAY.exists(), reason="needs scikit-learn and the Mother's Day test set")
+def test_bundled_model_reproduces_the_mothersday_confusion_matrix():
+    from sklearn.metrics import confusion_matrix
+
+    test = pd.read_parquet(MOTHERSDAY)
+    labels = classify.classify(test.rename(columns={"minute_timestamp_utc": "datetime"}))
+    classes = list(classify.PROBABILITY_COLUMNS)
+    assert confusion_matrix(test["label"], labels["ml_class"], labels=classes).tolist() == MOTHERSDAY_CONFUSION
+    np.testing.assert_allclose(labels[list(classify.PROBABILITY_COLUMNS.values())].sum(axis=1), 1, rtol=1e-6)
+
+
+def _write_lvl0(df, path):
+    schema.write(df, path, {"time_scale": "UTC", "leap_seconds": "18", "firmware": "v326f",
+                            "source_file": "synthetic.bin"})
+
+
+def test_pipeline_classifies_only_gated_minutes(tmp_path, products):
+    lvl0 = tmp_path / "scintpi3_20240511_0200_96.75784W_32.99184N_v326f_lvl0.pq"
+    _write_lvl0(synthetic_lvl0(), lvl0)
+    lvl3_path = [p for p in process_file(lvl0, tmp_path, mode="both") if p.endswith("_lvl3.pq")][0]
+    lvl3 = pd.read_parquet(lvl3_path)
+    assert list(lvl3.columns) == schema.LVL3_COLUMN_NAMES
+    assert lvl3["ml_class"].dtype == "string" and lvl3["ml_prob_rfi"].dtype == np.float32
+    lvl2 = pd.read_parquet(lvl3_path.replace("_lvl3", "_lvl2"))
+    assert list(lvl2.columns) == schema.COLUMN_NAMES
+
+    gated = set(map(tuple, compute_features(products[0])[["prn", "datetime"]].astype(str).values))
+    classified = lvl3["ml_class"].notna()
+    meta = schema.read_metadata(lvl3_path)
+    if not HAVE_SKLEARN:
+        assert not classified.any() and meta["ml_classification"].startswith("skipped")
+        return
+    assert set(map(tuple, lvl3.loc[classified, ["prn", "datetime"]].astype(str).values)) == gated
+    assert 0 < len(gated) < len(lvl3)
+    probabilities = lvl3.loc[classified, list(classify.PROBABILITY_COLUMNS.values())]
+    np.testing.assert_allclose(probabilities.sum(axis=1), 1, rtol=1e-6)
+    assert lvl3.loc[~classified, "ml_prob_scintillation"].isna().all()
+    assert meta["ml_classification"] == "on"
+    assert meta["ml_model"] == classify.MODEL_FILE and len(meta["ml_model_sha256"]) == 12
+
+
+def test_10hz_data_get_null_classes_without_failing(tmp_path):
+    lvl3_path = process_file(LVL0_10HZ, tmp_path, mode="lvl3")[0]
+    lvl3 = pd.read_parquet(lvl3_path)
+    assert list(lvl3.columns) == schema.LVL3_COLUMN_NAMES
+    assert lvl3["ml_class"].isna().all() and lvl3["ml_prob_multipath"].isna().all()
+    assert "10 Hz" in schema.read_metadata(lvl3_path)["ml_classification"]
+
+
+def test_missing_scikit_learn_gives_null_classes(monkeypatch, products):
+    frame, minute, fs = products
+    monkeypatch.setitem(sys.modules, "sklearn", None)
+    classify.load_model.cache_clear()
+    try:
+        out, meta = classify.classify_minutes(frame, minute, fs)
+    finally:
+        classify.load_model.cache_clear()
+    assert out["ml_class"].isna().all() and len(out) == len(minute)
+    assert "scikit-learn is not installed" in meta["ml_classification"]
+
+
+def test_importing_the_pipeline_does_not_import_scikit_learn():
+    code = "import sys, scintkit.pipeline; assert 'sklearn' not in sys.modules and 'joblib' not in sys.modules"
+    subprocess.run([sys.executable, "-c", code], check=True)

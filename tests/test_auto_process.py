@@ -29,7 +29,8 @@ def test_outputs_follow_the_schema(old_fixture_outputs):
     out, summary = old_fixture_outputs
     for path in summary["written"]:
         frame = pd.read_parquet(path)
-        assert list(frame.columns) == schema.COLUMN_NAMES
+        names = schema.LVL3_COLUMN_NAMES if path.endswith("_lvl3.pq") else schema.COLUMN_NAMES
+        assert list(frame.columns) == names
         assert not frame.duplicated(["datetime", "prn"]).any()
         assert frame["datetime"].dt.microsecond.eq(0).all()
         assert not any(c.endswith("3") for c in frame.columns if c[-1].isdigit())

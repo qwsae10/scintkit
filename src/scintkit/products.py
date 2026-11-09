@@ -92,8 +92,11 @@ def compute_products(df, fs=None):
 
 def assemble(frame, minute, interval):
     """lvl3 (``interval="1min"``) or lvl2 (``"1s"``) table: first sample per satellite and interval
-    plus that satellite-minute's products, conformed to schema.COLUMNS."""
+    plus that satellite-minute's products, conformed to schema.LVL3_COLUMNS or schema.COLUMNS.
+
+    For lvl3, ``minute`` must carry the classification columns (see machine_learning.classify).
+    """
     rows = first_samples(frame, interval)
     rows["_minute"] = rows["datetime"].dt.floor("1min")
     rows = rows.merge(minute.rename(columns={"datetime": "_minute"}), on=["prn", "_minute"], how="left")
-    return schema.conform(rows)
+    return schema.conform(rows, schema.LVL3_COLUMNS if interval == "1min" else schema.COLUMNS)

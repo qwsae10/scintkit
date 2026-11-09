@@ -51,14 +51,24 @@ def _channel_products(i):
     ]
 
 
-# (name, dtype, unit, description) of every lvl2/lvl3 column, in file order.
+# Signal classification (lvl3 only); null where the minute was not classified.
+_CLASSIFICATION = [
+    ("ml_class", "string", "", "cause of the C/N0 fluctuation: Multipath, RFI or Scintillation"),
+    ("ml_prob_multipath", "float32", "", "model probability of Multipath"),
+    ("ml_prob_rfi", "float32", "", "model probability of RFI"),
+    ("ml_prob_scintillation", "float32", "", "model probability of Scintillation"),
+]
+
+# (name, dtype, unit, description) of every lvl2 column, in file order; lvl3 adds the classification.
 COLUMNS = _KEYS + _FIRST_SAMPLE + _channel_products(1) + _channel_products(2)
+LVL3_COLUMNS = COLUMNS + _CLASSIFICATION
 COLUMN_NAMES = [c[0] for c in COLUMNS]
+LVL3_COLUMN_NAMES = [c[0] for c in LVL3_COLUMNS]
 
 
-def conform(df):
-    """Exactly the schema columns, in order and with the schema dtypes."""
-    return df[COLUMN_NAMES].astype({name: dtype for name, dtype, _, _ in COLUMNS})
+def conform(df, columns=COLUMNS):
+    """Exactly the ``columns`` (COLUMNS or LVL3_COLUMNS), in order and with their dtypes."""
+    return df[[c[0] for c in columns]].astype({name: dtype for name, dtype, _, _ in columns})
 
 
 def file_metadata(source, firmware, fs, leap_seconds):

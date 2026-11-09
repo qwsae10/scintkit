@@ -27,6 +27,11 @@ dev = [
   "matplotlib",
   "pytest",
 ]
+# Signal classification; the bundled model was pickled with scikit-learn 1.6.1.
+ml = [
+  "scikit-learn==1.6.1",
+  "joblib>=1.2",
+]
 
 [project.scripts]
 scintkit-ml-features = "scintkit.machine_learning.features:main"
@@ -39,4 +44,4 @@ version = { attr = "scintkit.__version__" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-scintkit = ["data/station_scintpi_codes.csv"]
+scintkit = ["data/station_scintpi_codes.csv", "data/histgb_full_25features.joblib"]

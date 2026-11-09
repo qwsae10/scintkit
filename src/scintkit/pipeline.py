@@ -13,6 +13,7 @@ from multiprocessing import Pool
 
 from scintkit import schema
 from scintkit.filenames import output_path, start_time
+from scintkit.machine_learning.classify import classify_minutes, null_classes
 from scintkit.products import assemble, compute_products
 from scintkit.reading import UnsupportedFirmware, read_lvl0, to_lvl0
 
@@ -27,12 +28,13 @@ def _out_dir(path, output_dir, mirror):
     return os.path.join(output_dir, os.path.basename(os.path.dirname(os.path.abspath(path)))) if mirror else output_dir
 
 
-def process_file(path, output_dir, mode="both", fs=None, overwrite=False):
+def process_file(path, output_dir, mode="both", fs=None, overwrite=False, classify=True):
     """Write the outputs of one raw or lvl0 file into ``output_dir``; return the paths written.
 
     ``mode`` is "lvl0", "lvl2", "lvl3" or "both" (lvl2 and lvl3); raw input
     also gets its lvl0 file. Existing outputs are kept unless ``overwrite``.
-    ``fs`` (Hz) is detected from the data when None.
+    ``fs`` (Hz) is detected from the data when None. With ``classify`` lvl3
+    gets the signal class of gated minutes (20 Hz data and the ``ml`` extra).
     """
     path = os.fspath(path)
     targets = {level: output_path(path, output_dir, level) for level in LEVELS[mode]}
@@ -54,8 +56,13 @@ def process_file(path, output_dir, mode="both", fs=None, overwrite=False):
     del df
     file_meta = schema.file_metadata(meta.get("source_file", path), meta.get("firmware"), fs,
                                      meta["leap_seconds"])
+    ml_meta = {}
+    if "lvl3" in targets:
+        minute, ml_meta = (classify_minutes(frame, minute, fs) if classify
+                           else (null_classes(minute), {"ml_classification": "off"}))
     for level, out in targets.items():
-        schema.write(assemble(frame, minute, "1min" if level == "lvl3" else "1s"), out, file_meta)
+        level_meta = {**file_meta, **ml_meta} if level == "lvl3" else file_meta
+        schema.write(assemble(frame, minute, "1min" if level == "lvl3" else "1s"), out, level_meta)
         logger.info("wrote %s", out)
         written.append(out)
     return written
@@ -63,9 +70,9 @@ def process_file(path, output_dir, mode="both", fs=None, overwrite=False):
 
 def _run(task):
     """Process one file; return ``(path, status, written paths or reason)`` without raising."""
-    path, output_dir, mode, fs, overwrite = task
+    path, output_dir, mode, fs, overwrite, classify = task
     try:
-        written = process_file(path, output_dir, mode=mode, fs=fs, overwrite=overwrite)
+        written = process_file(path, output_dir, mode=mode, fs=fs, overwrite=overwrite, classify=classify)
         return path, "ok" if written else "skipped", written
     except UnsupportedFirmware as error:
         logger.warning("unsupported: %s", error)
@@ -92,28 +99,30 @@ def _summarise(results):
     return summary
 
 
-def _tasks(files, output_dir, mode, fs, overwrite, mirror):
+def _tasks(files, output_dir, mode, fs, overwrite, mirror, classify):
     if isinstance(files, (str, os.PathLike)):
         files = [files]
-    return [(os.fspath(f), _out_dir(f, os.fspath(output_dir), mirror), mode, fs, overwrite) for f in files]
+    return [(os.fspath(f), _out_dir(f, os.fspath(output_dir), mirror), mode, fs, overwrite, classify)
+            for f in files]
 
 
-def process(files, output_dir, mode="both", fs=None, overwrite=False, mirror=False):
+def process(files, output_dir, mode="both", fs=None, overwrite=False, mirror=False, classify=True):
     """Process files one after another; return a summary dict.
 
     The summary has ``written`` (paths), ``skipped`` (inputs whose outputs
     exist), and ``failed``/``unsupported`` as ``(input, reason)`` pairs. With
     ``mirror`` outputs go to ``output_dir/<input's folder name>/``.
     """
-    return _summarise([_run(t) for t in _tasks(files, output_dir, mode, fs, overwrite, mirror)])
+    return _summarise([_run(t) for t in _tasks(files, output_dir, mode, fs, overwrite, mirror, classify)])
 
 
-def process_parallel(files, output_dir, n_workers=4, mode="both", fs=None, overwrite=False, mirror=False):
+def process_parallel(files, output_dir, n_workers=4, mode="both", fs=None, overwrite=False, mirror=False,
+                     classify=True):
     """:func:`process` with one file per task on ``n_workers`` processes; a failure never stops the pool.
 
     A 4 h 20 Hz file needs about 20 GB of memory, so size ``n_workers`` to the machine.
     """
-    tasks = _tasks(files, output_dir, mode, fs, overwrite, mirror)
+    tasks = _tasks(files, output_dir, mode, fs, overwrite, mirror, classify)
     with Pool(n_workers, maxtasksperchild=1) as pool:
         return _summarise(list(pool.imap_unordered(_run, tasks)))
 
@@ -133,14 +142,14 @@ def find_recent_files(archive_root, days=1, now=None):
     return sorted(found)
 
 
-def process_recent(archive_root, output_root, days=1, n_workers=4, mode="both"):
+def process_recent(archive_root, output_root, days=1, n_workers=4, mode="both", classify=True):
     """Process the raw files of the last ``days`` days into ``output_root/<station>/``, skipping done ones.
 
     Meant for a daily cron job; returns the :func:`process` summary.
     """
     files = find_recent_files(archive_root, days=days)
     logger.info("%d raw files in the last %g days under %s", len(files), days, archive_root)
-    return process_parallel(files, output_root, n_workers=n_workers, mode=mode, mirror=True)
+    return process_parallel(files, output_root, n_workers=n_workers, mode=mode, mirror=True, classify=classify)
 
 
 def split_evenly(items, n):
@@ -164,7 +173,7 @@ def _expand(patterns):
 
 def _run_files(args):
     return process_parallel(_expand(args.files), args.output, n_workers=args.workers, mode=args.mode,
-                            fs=args.fs, overwrite=args.overwrite, mirror=True)
+                            fs=args.fs, overwrite=args.overwrite, mirror=True, classify=args.classify)
 
 
 def _run_array(args):
@@ -174,11 +183,12 @@ def _run_array(args):
     mine = split_evenly(files, args.n_tasks)[args.task_id]
     logger.info("task %d/%d: %d of %d files", args.task_id, args.n_tasks, len(mine), len(files))
     return process_parallel(mine, args.output, n_workers=args.workers, mode=args.mode,
-                            fs=args.fs, overwrite=args.overwrite, mirror=True)
+                            fs=args.fs, overwrite=args.overwrite, mirror=True, classify=args.classify)
 
 
 def _run_recent(args):
-    return process_recent(args.archive, args.output, days=args.days, n_workers=args.workers, mode=args.mode)
+    return process_recent(args.archive, args.output, days=args.days, n_workers=args.workers, mode=args.mode,
+                          classify=args.classify)
 
 
 def main(argv=None):
@@ -192,6 +202,8 @@ def main(argv=None):
     common.add_argument("--mode", default="both", choices=list(LEVELS))
     common.add_argument("--fs", type=float, help="sampling rate in Hz (default: detect)")
     common.add_argument("--overwrite", action="store_true")
+    common.add_argument("--no-classify", dest="classify", action="store_false",
+                        help="leave the lvl3 signal-class columns null")
 
     parser = argparse.ArgumentParser(prog="scintkit-process", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
