@@ -122,40 +122,53 @@ def _write_lvl0(df, path):
                             "source_file": "synthetic.bin"})
 
 
-def test_pipeline_classifies_only_gated_minutes(tmp_path, products):
+def test_pipeline_classifies_only_dual_frequency_minutes_above_the_s4_threshold(tmp_path, products):
     lvl0 = tmp_path / "scintpi3_20240511_0200_96.75784W_32.99184N_v326f_lvl0.pq"
     _write_lvl0(synthetic_lvl0(), lvl0)
     lvl3_path = [p for p in process_file(lvl0, tmp_path, mode="both") if p.endswith("_lvl3.pq")][0]
     lvl3 = pd.read_parquet(lvl3_path)
     assert list(lvl3.columns) == schema.LVL3_COLUMN_NAMES
     assert lvl3["ml_class"].dtype == "string" and lvl3["ml_prob_rfi"].dtype == np.float32
+    assert lvl3["ml_class"].notna().all()
     lvl2 = pd.read_parquet(lvl3_path.replace("_lvl3", "_lvl2"))
     assert list(lvl2.columns) == schema.COLUMN_NAMES
 
-    gated = set(map(tuple, compute_features(products[0])[["prn", "datetime"]].astype(str).values))
-    classified = lvl3["ml_class"].notna()
+    features = compute_features(products[0])
+    sent = set(map(tuple, classify.classifiable(features)[["prn", "datetime"]].astype(str).values))
+    assert ("G06", "2024-05-11 02:01:00") not in sent  # featured, but no channel-2 TEC: single frequency
+    classified = lvl3["ml_class"].ne(classify.UNCLASSIFIED)
     meta = schema.read_metadata(lvl3_path)
     if not HAVE_SKLEARN:
-        assert not classified.any() and meta["ml_classification"].startswith("skipped")
+        assert not classified.any() and meta["ml_classifier_ran"] == "false"
         return
-    assert set(map(tuple, lvl3.loc[classified, ["prn", "datetime"]].astype(str).values)) == gated
-    assert 0 < len(gated) < len(lvl3)
+    assert set(map(tuple, lvl3.loc[classified, ["prn", "datetime"]].astype(str).values)) == sent
+    assert 0 < len(sent) < len(features) < len(lvl3)
+    assert set(lvl3.loc[classified, "ml_class"]) <= set(classify.PROBABILITY_COLUMNS)
     probabilities = lvl3.loc[classified, list(classify.PROBABILITY_COLUMNS.values())]
     np.testing.assert_allclose(probabilities.sum(axis=1), 1, rtol=1e-6)
     assert lvl3.loc[~classified, "ml_prob_scintillation"].isna().all()
-    assert meta["ml_classification"] == "on"
+    assert meta["ml_classification"] == "on" and meta["ml_classifier_ran"] == "true"
     assert meta["ml_model"] == classify.MODEL_FILE and len(meta["ml_model_sha256"]) == 12
 
 
-def test_10hz_data_get_null_classes_without_failing(tmp_path):
+def test_low_s4_and_single_frequency_minutes_are_not_sent_to_the_model():
+    table = pd.DataFrame({"s4_1": [0.19, 0.2, 0.5, 0.5], "s4_2": [0.3, 0.3, np.nan, 0.3],
+                          classify.TEC_POWER: [-30.0, -30.0, -30.0, -30.0]})
+    assert classify.classifiable(table).index.tolist() == [1, 3]
+    table.loc[3, classify.TEC_POWER] = np.nan
+    assert classify.classifiable(table).index.tolist() == [1]
+
+
+def test_10hz_data_are_unclassified_without_failing(tmp_path):
     lvl3_path = process_file(LVL0_10HZ, tmp_path, mode="lvl3")[0]
     lvl3 = pd.read_parquet(lvl3_path)
     assert list(lvl3.columns) == schema.LVL3_COLUMN_NAMES
-    assert lvl3["ml_class"].isna().all() and lvl3["ml_prob_multipath"].isna().all()
-    assert "10 Hz" in schema.read_metadata(lvl3_path)["ml_classification"]
+    assert lvl3["ml_class"].eq(classify.UNCLASSIFIED).all() and lvl3["ml_prob_multipath"].isna().all()
+    meta = schema.read_metadata(lvl3_path)
+    assert "10 Hz" in meta["ml_classification"] and meta["ml_classifier_ran"] == "false"
 
 
-def test_missing_scikit_learn_gives_null_classes(monkeypatch, products):
+def test_missing_scikit_learn_leaves_every_minute_unclassified(monkeypatch, products):
     frame, minute, fs = products
     monkeypatch.setitem(sys.modules, "sklearn", None)
     classify.load_model.cache_clear()
@@ -163,7 +176,7 @@ def test_missing_scikit_learn_gives_null_classes(monkeypatch, products):
         out, meta = classify.classify_minutes(frame, minute, fs)
     finally:
         classify.load_model.cache_clear()
-    assert out["ml_class"].isna().all() and len(out) == len(minute)
+    assert out["ml_class"].eq(classify.UNCLASSIFIED).all() and len(out) == len(minute)
     assert "scikit-learn is not installed" in meta["ml_classification"]
 
 

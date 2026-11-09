@@ -13,7 +13,7 @@ from multiprocessing import Pool
 
 from scintkit import schema
 from scintkit.filenames import output_path, start_time
-from scintkit.machine_learning.classify import classify_minutes, null_classes
+from scintkit.machine_learning.classify import classify_minutes, unclassified
 from scintkit.products import assemble, compute_products
 from scintkit.reading import UnsupportedFirmware, read_lvl0, to_lvl0
 
@@ -58,8 +58,10 @@ def process_file(path, output_dir, mode="both", fs=None, overwrite=False, classi
                                      meta["leap_seconds"])
     ml_meta = {}
     if "lvl3" in targets:
-        minute, ml_meta = (classify_minutes(frame, minute, fs) if classify
-                           else (null_classes(minute), {"ml_classification": "off"}))
+        if classify:
+            minute, ml_meta = classify_minutes(frame, minute, fs)
+        else:
+            minute, ml_meta = unclassified(minute), {"ml_classification": "off", "ml_classifier_ran": "false"}
     for level, out in targets.items():
         level_meta = {**file_meta, **ml_meta} if level == "lvl3" else file_meta
         schema.write(assemble(frame, minute, "1min" if level == "lvl3" else "1s"), out, level_meta)
@@ -203,7 +205,7 @@ def main(argv=None):
     common.add_argument("--fs", type=float, help="sampling rate in Hz (default: detect)")
     common.add_argument("--overwrite", action="store_true")
     common.add_argument("--no-classify", dest="classify", action="store_false",
-                        help="leave the lvl3 signal-class columns null")
+                        help="label every lvl3 minute Unclassified")
 
     parser = argparse.ArgumentParser(prog="scintkit-process", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
