@@ -1,0 +1,7 @@
+------------------------------------------------------------------------------
+File Creation Date/Time: 9 Nov 2026 15:46:45
+Block Name: ReceiverSetup1 (SBF)
+
+TOW [s],WNc [w],MarkerName,MarkerNumber,Observer,Agency,RxSerialNumber,RxName,RxVersion,AntSerialNbr,AntType,deltaH [m],deltaE [m],deltaN [m],MarkerType,GNSSFWVersion,ProductName,Latitude [rad],Longitude [rad],Height [m],StationCode,MonumentIdx,ReceiverIdx,CountryCode,Reserved1
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+0.160,2444,tx01,Unknown,Unknown,Unknown,3819387,GRB0051,4.14.0,Unknown,Unknown,0.0000000,0.0000000,0.0000000,Unknown,6.14.7-gfc4f1d86b5,mosaic-X5,0.575816183399,-1.688733382874,204.740,,0,0,,
