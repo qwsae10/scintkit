@@ -1,44 +1,55 @@
-#%%
+import shutil
 from pathlib import Path
+
 import pandas as pd
-import scintkit
 
-data_dir = Path("test_data")
-raw_files = sorted(data_dir.glob("scintpi3_*lvl0.pq"))
+from scintkit.pipelines.auto import process
 
-# make sure files exist
-if not raw_files:
-    raise FileNotFoundError(
-        f"No ScintPi files found in {data_dir.resolve()}"
-    )
-
-# quick test on first file
-raw_file = raw_files[0]
-
-# run processing
-output_files = scintkit.pipelines.auto.process(
-    raw_file,
-    verbose=True,
-    mode="lvl3"
+FIXTURE = (
+    Path(__file__).parent
+    / "fixtures"
+    / "scintpi3_20241011_1200_96.7573W_32.9919N_v326f_lvl0.pq"
 )
 
-# validate output object
-assert isinstance(output_files, list), "output is not a list"
-assert len(output_files) > 0, "no output files returned"
+PRODUCT_COLUMNS = [
+    "tec_cph12",
+    "tec_rng12",
+    *(
+        f"{name}_{i}"
+        for i in ("1", "2")
+        for name in (
+            "sigma_phi",
+            "n_sigphi",
+            "n_cycleslip",
+            "s4",
+            "s4_detrended",
+            "s4_corrected",
+            "tau",
+            "n_s4",
+            "sigma_phi_quality_flag",
+            "s4_quality_flag",
+        )
+    ),
+]
 
-for outfile in output_files:
 
-    # validate file exists
-    path = Path(outfile)
-    assert path.exists(), f"{outfile} does not exist"
+def test_process_writes_lvl2_and_lvl3_products(tmp_path):
+    lvl0 = tmp_path / FIXTURE.name
+    shutil.copy(FIXTURE, lvl0)
 
-    # validate parquet can open
-    df = pd.read_parquet(path)
+    outputs = process(lvl0, mode="both", fs=None)
 
-    # basic dataframe checks
-    assert not df.empty, f"{outfile} is empty"
+    lvl2 = tmp_path / FIXTURE.name.replace("_lvl0", "_lvl2")
+    lvl3 = tmp_path / FIXTURE.name.replace("_lvl0", "_lvl3")
+    assert sorted(outputs) == sorted([str(lvl2), str(lvl3)])
 
-    print(f"successfully opened: {outfile}")
-    print(df.head(2))
+    per_second = pd.read_parquet(lvl2)
+    per_minute = pd.read_parquet(lvl3)
+    for frame in (per_second, per_minute):
+        assert not frame.empty
+        assert set(PRODUCT_COLUMNS) <= set(frame.columns)
 
-print("all tests passed")
+    assert not per_minute.duplicated(["minbin", "prn"]).any()
+    assert not per_second.duplicated(["secbin", "prn"]).any()
+    assert per_minute["s4_1"].notna().any()
+    assert per_minute["sigma_phi_1"].notna().any()
