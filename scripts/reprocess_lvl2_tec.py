@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from scintkit.services.compute import add_tec_columns
+from scintkit.tec import add_tec_columns
 
 
 def reprocess_file(path: Path, compression: str = "brotli") -> dict[str, int]:

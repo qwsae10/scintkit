@@ -33,7 +33,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from scintkit.services.compute import add_tec_columns
+from scintkit.tec import add_tec_columns
 
 
 RAW_NAME = re.compile(r"\.[0-9]{2}_$")
