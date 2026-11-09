@@ -1,5 +1,6 @@
 
 #%%
+import logging
 import sys
 
 from pathlib import Path
@@ -8,6 +9,8 @@ import numpy as np
 import pandas as pd
 
 from scintkit.pipeline import process
+
+logging.basicConfig(level=logging.INFO)
 
 data_dir = Path("/titan/frodrigues/storm_data/oct10_11_2024/binfiles/")
 raw_files = sorted(data_dir.glob("scintpi3_*.bin.zip"))
@@ -22,7 +25,7 @@ if not raw_files:
         "Start Jupyter from the repository root, or update data_dir."
     )
 
-lvl3_files = process(raw_files, verbose=True,mode='lvl3')
+lvl3_files = process(raw_files, mode='lvl3')
 
 # %%
 

@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 from scipy import signal
 
-from scintkit.formatting import temp_formating
+from scintkit.formatting import format_lvl0
 from scintkit.tec import add_tec_columns
 
 try:  # Support both ``python file.py`` and ``python -m scintkit...``.
@@ -462,7 +462,7 @@ def compute_features(
         if column not in {*REQUIRED_INPUT_COLUMNS, "_receiver_epoch"}
     ]
     frame.drop(columns=unneeded, inplace=True)
-    frame = temp_formating(frame)
+    frame = format_lvl0(frame)
 
     if verbose:
         print("Computing S4 and valid sample counts")

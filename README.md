@@ -85,6 +85,23 @@ This will:
 3. compute derived products
 4. output lvl3 files
 
+Progress is reported through `logging`; call
+`logging.basicConfig(level=logging.INFO)` to see it.
+
+### Command line and Slurm arrays
+
+```bash
+# lvl2/lvl3 products; files are split across $SLURM_ARRAY_TASK_COUNT tasks
+scintkit-process products --data-dir /path/to/data --pattern "scintpi3_*.bin.zip" --mode both
+
+# raw -> lvl0 Parquet, mirroring the input tree
+scintkit-process convert --pattern "/raw/*/*2024*.bin.zip" \
+    --input-root /raw --output-root /lvl0 --versions v324 v325 v326 --only-missing
+```
+
+`--task-id`, `--n-tasks` and `--workers` default to `SLURM_ARRAY_TASK_ID`,
+`SLURM_ARRAY_TASK_COUNT` and `SLURM_CPUS_PER_TASK` (or 0, 1, 1 outside Slurm).
+
 ### Identifying a station
 
 The maintained station registry can identify a receiver from coordinates:

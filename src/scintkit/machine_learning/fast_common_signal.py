@@ -5,7 +5,7 @@ rewrite timestamps or a Parquet file.  It labels the receiver epochs already
 encoded by row order and uses that integer label for the common-signal median.
 
 The input must still be in its original receiver/file row order.  Calling
-``temp_formating`` is fine because it preserves that order.  Do not sort by
+``format_lvl0`` is fine because it preserves that order.  Do not sort by
 the damaged datetime column before assigning receiver epoch IDs.
 """
 

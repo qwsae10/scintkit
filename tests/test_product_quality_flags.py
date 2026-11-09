@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-import scintkit.products as compute
+import scintkit.products as products
 
 
 def _minute(prn, minute, phase_count, snr_count, edge_gap=False):
@@ -35,11 +35,11 @@ def test_add_products_creates_separate_sigma_phi_and_s4_quality_flags(monkeypatc
         ignore_index=True,
     )
 
-    monkeypatch.setattr(compute, "temp_formating", lambda df: df.copy())
-    monkeypatch.setattr(compute, "process_phases", lambda df: df)
-    monkeypatch.setattr(compute, "detect_sampling_rate", lambda df: 10.0)
+    monkeypatch.setattr(products, "format_lvl0", lambda df: df.copy())
+    monkeypatch.setattr(products, "process_phases", lambda df: df)
+    monkeypatch.setattr(products, "detect_sampling_rate", lambda df: 10.0)
 
-    result = compute.add_products(frame)
+    result = products.add_products(frame)
     minute_products = result.groupby(["prn", "minbin"], sort=False).first()
 
     assert minute_products.loc[("G01", pd.Timestamp("2024-01-01 00:00")),
@@ -86,24 +86,24 @@ def test_channel_2_edge_gap_mask_sets_channel_2_sigma_phi_flag(monkeypatch):
         }
     )
 
-    monkeypatch.setattr(compute, "temp_formating", lambda df: df.copy())
-    monkeypatch.setattr(compute, "process_phases", lambda df: df)
-    monkeypatch.setattr(compute, "detect_sampling_rate", lambda df: 10.0)
+    monkeypatch.setattr(products, "format_lvl0", lambda df: df.copy())
+    monkeypatch.setattr(products, "process_phases", lambda df: df)
+    monkeypatch.setattr(products, "detect_sampling_rate", lambda df: 10.0)
 
-    result = compute.add_products(frame).iloc[0]
+    result = products.add_products(frame).iloc[0]
 
     assert result["sigma_phi_quality_flag_1"] == 0
     assert result["sigma_phi_quality_flag_2"] == 1
 
 
 def test_missing_channel_edge_gap_mask_fails_closed():
-    products = pd.DataFrame(
+    minute = pd.DataFrame(
         {
             "prn": ["G01"],
             "n_sigphi_2": [600],
         }
     )
 
-    result = compute._add_quality_flags(products, fs=10.0)
+    result = products._add_quality_flags(minute, fs=10.0)
 
     assert result.loc[0, "sigma_phi_quality_flag_2"] == 1
