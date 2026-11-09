@@ -1,22 +1,37 @@
-.DS_Store
-tests/data/scintpi3_20241011_1200_96.7573W_32.9919N_v326f.bin.zip 
-tests/data/scintpi3_20241011_1200_96.7573W_32.9919N_v326f_lvl3.pq 
-tests/data/scintpi3_20241011_0800_96.7573W_32.9919N_v326f.bin.zip 
-tests/data/scintpi3_20241011_0800_96.7573W_32.9919N_v326f_lvl3.pq 
-tests/data/scintpi3_20241011_0400_96.7573W_32.9920N_v326f.bin.zip 
-tests/data/scintpi3_20241011_0400_96.7573W_32.9920N_v326f_lvl3.pq 
-tests/data/scintpi3_20241011_0004_96.7572W_32.9920N_v326f.bin.zip 
-tests/data/scintpi3_20241011_0004_96.7572W_32.9920N_v326f_lvl3.pq
-tests/data/*lvl2*
-
-
-*bin.zip*
-# python cache
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
-.vscode/
 *.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
 
-# Generated test and batch-job logs
-tests/logs/
+# OS / editors
+.DS_Store
+.vscode/
+*.swp
+*.code-workspace
+
+# Slurm / run logs
+*.out
+*.err
+logs/
+
+# Data and outputs
+*.pq
+*.parquet
+*.bin
+*.zip
+*.h5
+examples/**/*.png
+tests/**/*.png
+
+# Small test fixtures may be tracked
+!tests/fixtures/
+!tests/fixtures/**/*.pq
+!tests/fixtures/**/*.parquet
+!tests/fixtures/**/*.bin.zip
+
+# Package data
+!src/scintkit/data/station_scintpi_codes.csv
