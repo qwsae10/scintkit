@@ -5,7 +5,7 @@ import pandas as pd
 
 
 def generate_availability_plot(plot_targets, cutoff, now, output_path):
-    """Generates and saves the availability plot."""
+    """Save a per-station availability chart (green = data present) to output_path."""
     n = len(plot_targets)
     if n == 0:
         raise ValueError("No valid targets to plot.")
@@ -48,7 +48,7 @@ def generate_availability_plot(plot_targets, cutoff, now, output_path):
     axes[-1].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     axes[-1].xaxis.set_minor_locator(mdates.DayLocator())
 
-    fig.suptitle(f"ScintPi Data Availability (last 3 months)\nGenerated {now:%Y-%m-%d}", fontsize=14, y=0.995)
+    fig.suptitle(f"ScintPi Data Availability, {cutoff:%Y-%m-%d} to {now:%Y-%m-%d}", fontsize=14, y=0.995)
     fig.autofmt_xdate(rotation=0)
     fig.tight_layout(rect=[0, 0, 1, 0.97])
 
