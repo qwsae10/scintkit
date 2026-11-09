@@ -16,7 +16,7 @@ import pandas as pd
 
 from scintkit.filenames import firmware_version
 from scintkit.formatting import make_1min, make_1sec
-from scintkit.products import add_products
+from scintkit.products import compute_products, merge_products
 from scintkit.reading import build_output_path, convert_to_lvl0
 
 logger = logging.getLogger(__name__)
@@ -45,15 +45,16 @@ def process(flist, mode="both", fs=50):
             else:
                 pq_fname = convert_to_lvl0(fname)
 
-            df = add_products(pd.read_parquet(pq_fname), fs=fs)
+            # Products are merged onto the reduced lvl2/lvl3 rows, not the full-rate frame.
+            frame, minute = compute_products(pd.read_parquet(pq_fname), fs=fs)
 
             if mode in ("lvl3", "both"):
                 outname = str(pq_fname).replace("_lvl0", "_lvl3")
-                make_1min(df).to_parquet(outname)
+                merge_products(make_1min(frame), minute).to_parquet(outname)
                 outputs.append(outname)
             if mode in ("lvl2", "both"):
                 outname = str(pq_fname).replace("_lvl0", "_lvl2")
-                make_1sec(df).to_parquet(outname)
+                merge_products(make_1sec(frame), minute).to_parquet(outname)
                 outputs.append(outname)
         except Exception:
             logger.exception("Error processing %s", fname)

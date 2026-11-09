@@ -72,8 +72,9 @@ def _add_quality_flags(products, fs):
     return products.drop(columns=edge_gap_columns, errors="ignore")
 
 
-def add_products(df, fs=None):
-    """Full-rate frame with TEC, detrended phase/SNR and per-minute products merged in.
+def compute_products(df, fs=None):
+    """Return ``(frame, minute)``: the full-rate frame with TEC and detrended phase/SNR
+    added, and one row of products per satellite and minute (None if nothing to compute).
 
     Per satellite and minute: sigma_phi_* (rad), n_sigphi_*, n_cycleslip_*,
     s4_*, s4_detrended_*, s4_corrected_*, tau_* (s), n_s4_* and quality flags.
@@ -123,8 +124,17 @@ def add_products(df, fs=None):
             agg_dict[f"n_s4_{i}"] = (snr_col, compute_n_samples)
 
     if not agg_dict:
-        return df
+        return df, None
 
-    products = df.groupby(GROUP_COLUMNS, sort=False).agg(**agg_dict).reset_index()
-    products = _add_quality_flags(products, fs=fs)
-    return df.merge(products, on=GROUP_COLUMNS, how="left")
+    minute = df.groupby(GROUP_COLUMNS, sort=False).agg(**agg_dict).reset_index()
+    return df, _add_quality_flags(minute, fs=fs)
+
+
+def merge_products(frame, minute):
+    """Attach per-minute products to every row of ``frame`` (matched on PRN and minute)."""
+    return frame if minute is None else frame.merge(minute, on=GROUP_COLUMNS, how="left")
+
+
+def add_products(df, fs=None):
+    """Full-rate frame with TEC, detrended phase/SNR and per-minute products merged in."""
+    return merge_products(*compute_products(df, fs=fs))
