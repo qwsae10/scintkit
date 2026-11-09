@@ -52,7 +52,7 @@ def _add_quality_flags(minute, fs):
 def minute_products(df, fs):
     """One row per satellite and UTC minute (``datetime`` = minute start) with the per-channel products.
 
-    ``df`` is the full-rate frame after process_phases; ``fs`` in Hz. See docs/lvl3.md.
+    ``df`` is the full-rate frame after process_phases; ``fs`` in Hz. See docs/data_levels.md.
     """
     chans = channels(df)
     for i in chans:

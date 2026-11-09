@@ -53,8 +53,8 @@ def _channel_products(i):
         (f"n_s4_{i}", "int32", "", "valid C/N0 samples in the minute"),
         (f"n_sigphi_{i}", "int32", "", "valid detrended phase samples in the minute"),
         (f"n_cycleslip_{i}", "int32", "", "samples flagged as cycle slips in the minute"),
-        (f"s4_quality_flag_{i}", "int8", "", "1 = S4 not trustworthy (see docs/lvl3.md)"),
-        (f"sigma_phi_quality_flag_{i}", "int8", "", "1 = sigma-phi not trustworthy (see docs/lvl3.md)"),
+        (f"s4_quality_flag_{i}", "int8", "", "1 = S4 not trustworthy (see docs/data_levels.md)"),
+        (f"sigma_phi_quality_flag_{i}", "int8", "", "1 = sigma-phi not trustworthy (see docs/data_levels.md)"),
     ]
 
 
