@@ -1,6 +1,6 @@
 import pandas as pd
 
-from scintkit.data import load_station_codes
+from scintkit.stations import load_station_codes
 from scintkit.email_updates import core
 
 
@@ -56,7 +56,7 @@ def test_scan_sc4_uses_prefixes_from_targets(monkeypatch):
 
 
 def test_scan_septentrio_files_parses_doy_and_ignores_invalid_files(monkeypatch):
-    targets = [{"code": "US-TX4", "valid_times": set()}]
+    targets = [{"code": "US-TX4", "version": "SEPT", "valid_times": set()}]
     paths = [
         "/sept/CSS_1832.26_",
         "/sept/CSS_1832.26_.ismr",
