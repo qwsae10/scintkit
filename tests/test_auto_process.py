@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from scintkit.pipelines.auto import process
+from scintkit.pipeline import process
 
 FIXTURE = (
     Path(__file__).parent

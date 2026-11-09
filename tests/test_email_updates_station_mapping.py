@@ -1,6 +1,6 @@
 import pandas as pd
 
-from scintkit.data import load_station_codes
+from scintkit.stations import load_station_codes
 from scintkit.email_updates import core
 
 

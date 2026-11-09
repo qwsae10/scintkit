@@ -4,7 +4,7 @@ import glob
 import os
 import re
 import h5py as h5
-from scintkit.data import load_station_codes
+from scintkit.stations import load_station_codes
 
 
 def load_targets(csv_path=None):

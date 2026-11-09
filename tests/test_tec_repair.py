@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from scintkit.services.compute import add_tec_columns
-from scintkit.services.phase_detrend import repair_discontinuities_pos
+from scintkit.phase import repair_discontinuities_pos
+from scintkit.tec import add_tec_columns
 
 
 def test_repair_discontinuities_anchors_at_first_finite_value():

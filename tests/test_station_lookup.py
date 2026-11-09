@@ -1,6 +1,6 @@
 import pytest
 
-from scintkit.data import identify_station
+from scintkit.stations import identify_station
 
 
 def test_identify_station_from_coordinates():

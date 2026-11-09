@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-import scintkit.services.compute as compute
+import scintkit.products as compute
 
 
 def _minute(prn, minute, phase_count, snr_count, edge_gap=False):

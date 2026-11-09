@@ -23,8 +23,8 @@ import numpy as np
 import pandas as pd
 from scipy import signal
 
-from scintkit.preprocessing.format import temp_formating
-from scintkit.services.compute import add_tec_columns
+from scintkit.formatting import temp_formating
+from scintkit.tec import add_tec_columns
 
 try:  # Support both ``python file.py`` and ``python -m scintkit...``.
     from .receiver_clock import reconstruct_receiver_clock

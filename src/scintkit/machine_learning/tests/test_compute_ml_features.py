@@ -27,9 +27,10 @@ from scintkit.machine_learning.compute_ml_features import (
     regular_minute_signal,
 )
 from scintkit.machine_learning.receiver_clock import reconstruct_receiver_clock
-from scintkit.preprocessing.format import add_sigs, make_prn
-from scintkit.services.compute import _repair_tec_pair, compute_s4
-from scintkit.services.phase_detrend import repair_discontinuities_pos
+from scintkit.amplitude import compute_s4
+from scintkit.formatting import add_sigs, make_prn
+from scintkit.phase import repair_discontinuities_pos
+from scintkit.tec import _repair_tec_pair
 
 
 EXAMPLE_SOURCE_NAME = (

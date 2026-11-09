@@ -22,13 +22,19 @@ The Level 3 product schema and automatic quality-flag rules are documented in
 
 
 ```
-src/scintkit/reading/         # binary readers and data loading
-src/scintkit/preprocessing/   # formatting and preprocessing
-src/scintkit/services/        # core computations (TEC, S4, phase detrending)
-src/scintkit/utils/           # helper utilities
-src/scintkit/pipelines/       # end-to-end processing pipelines
-tests/                        # test scripts and example notebooks
-
+src/scintkit/
+  constants.py     lookup tables and processing thresholds
+  filenames.py     firmware version, start time and coordinates from file names
+  stations.py      station registry lookup (CSV in data/)
+  reading.py       binary readers and raw -> lvl0 Parquet conversion
+  formatting.py    constellation, PRN, signal and frequency columns
+  phase.py         phase detrending, cycle-slip repair, receiver clock
+  tec.py           carrier-phase and pseudorange TEC
+  amplitude.py     SNR detrending, S4, tau
+  products.py      per-minute products and quality flags
+  pipeline.py      process(), process_parallel() and the scintkit-process CLI
+  plotting.py      summary plots
+tests/             pytest suite and a 15-minute lvl0 fixture
 ```
 
 ---
@@ -67,7 +73,7 @@ You can import and run core processing functions directly.
 
 
 ```python
-from scintkit.pipelines.auto import process
+from scintkit.pipeline import process
 
 process("example.bin.zip")
 ```
@@ -84,7 +90,7 @@ This will:
 The maintained station registry can identify a receiver from coordinates:
 
 ```python
-from scintkit.data import identify_station
+from scintkit.stations import identify_station
 
 station = identify_station(latitude=32.9919, longitude=-96.7573)
 print(station["Code"])  # US-TX1
@@ -108,7 +114,7 @@ when no station is within 3 km. Pass `max_distance_km=` to change that limit.
 See:
 
 ```
-examples/compare_oct11.ipynb
+tutorials/compare_oct11.ipynb
 ```
 
 This notebook shows how to:

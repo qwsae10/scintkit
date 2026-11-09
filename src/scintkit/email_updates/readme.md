@@ -90,7 +90,7 @@ targets = load_targets("/path/to/custom_stations.csv")
 Code outside the email updates module can load the shared station table directly:
 
 ```python
-from scintkit.data import load_station_codes
+from scintkit.stations import load_station_codes
 
 stations = load_station_codes()
 ```

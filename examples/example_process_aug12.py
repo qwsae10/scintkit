@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import scintkit
+from scintkit.pipeline import process
 
 data_dir = Path("/mfs/io/groups/uars/scintpi/sc007/")
 raw_files = sorted(data_dir.glob("scintpi3_20240812*_65*_18*.bin.zip"))
@@ -22,7 +22,7 @@ if not raw_files:
         "Start Jupyter from the repository root, or update data_dir."
     )
 
-lvl3_files = scintkit.pipelines.auto.process(raw_files, verbose=True,mode='lvl3')
+lvl3_files = process(raw_files, verbose=True,mode='lvl3')
 
 # %%
 
