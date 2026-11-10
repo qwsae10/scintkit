@@ -58,6 +58,7 @@ def format_lvl0(df):
         logger.warning("dropping %d rows with unknown constellation codes", (~known).sum())
     df = df[known].reset_index(drop=True)
 
+    # One integer per satellite, so the signal table is looked up once per satellite instead of once per row.
     key = df["cons"].to_numpy(np.int64) * 1000 + df["svid"].to_numpy(np.int64)
     codes = np.unique(key)
     table = pd.DataFrame([satellite(int(k // 1000), int(k % 1000)) for k in codes],
