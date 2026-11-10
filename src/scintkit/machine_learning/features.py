@@ -28,10 +28,11 @@ FS_HZ = 20  # the features and the model assume 20 Hz data
 MINUTE_NS = 60 * 10**9
 MINUTE_SAMPLES = 60 * FS_HZ
 
-# Gate used in training: a satellite-minute is featured when both channels have
-# more than GATE_MIN_SAMPLES valid C/N0 samples and channel-1 S4 exceeds GATE_MIN_S4.
-GATE_MIN_SAMPLES = 1190
-GATE_MIN_S4 = 0.15
+# A satellite-minute gets features only when both channels have more than
+# FEATURE_MIN_SAMPLES valid C/N0 samples and channel-1 S4 exceeds FEATURE_MIN_S4.
+# The training set was built with the same thresholds.
+FEATURE_MIN_SAMPLES = 1190
+FEATURE_MIN_S4 = 0.15
 
 # Common mode: per satellite pass, C/N0 minus its centred rolling median; then the
 # median over satellites above the elevation mask at each receiver epoch.
@@ -83,7 +84,7 @@ def minute_grid(time_ns, values, minute_ns):
     grid = np.full(MINUTE_SAMPLES, np.nan)
     grid[slots] = values
     valid = np.flatnonzero(np.isfinite(grid))
-    if len(valid) <= GATE_MIN_SAMPLES:
+    if len(valid) <= FEATURE_MIN_SAMPLES:
         return None, len(valid)
     target = np.arange(MINUTE_SAMPLES)
     filled = np.interp(target, valid, grid[valid])
@@ -141,10 +142,10 @@ def _satellite_positions(frame, time_ns):
 
 
 def compute_features(frame):
-    """FEATURES and counts for every gated satellite-minute of a 20 Hz full-rate frame (after compute_products).
+    """FEATURES and counts for every selected satellite-minute of a 20 Hz full-rate frame (after compute_products).
 
     Uses ``datetime``, ``prn``, ``epoch``, ``elev``, ``snr1``, ``snr2`` and
-    ``tec_cph12``; one row per gated satellite-minute (``datetime`` = minute start).
+    ``tec_cph12``; one row per selected satellite-minute (``datetime`` = minute start).
     The frame is read, never copied or modified.
     """
     time_ns = frame["datetime"].to_numpy("datetime64[ns]").view(np.int64)
@@ -165,11 +166,11 @@ def compute_features(frame):
             rows = pos[start:stop]
             values = snr[rows]
             counts = np.isfinite(values).sum(axis=0)
-            if counts.min() <= GATE_MIN_SAMPLES:
+            if counts.min() <= FEATURE_MIN_SAMPLES:
                 continue
             linear = 10 ** (values / 10)  # float64 as in training; lvl3 s4_1 uses float32 C/N0
             s4 = np.nanstd(linear, axis=0) / np.nanmean(linear, axis=0)
-            if not s4[0] > GATE_MIN_S4:
+            if not s4[0] > FEATURE_MIN_S4:
                 continue
             minute_ns = int(minutes[start]) * MINUTE_NS
             snr1, n1 = minute_grid(time_ns[rows], values[:, 0], minute_ns)
@@ -197,7 +198,7 @@ KEY_COLUMNS = ["cons", "svid", "sig_1", "sig_2", "freq_1", "freq_2", "elev", "az
 
 
 def feature_table(path):
-    """Feature table of one raw or lvl0 file: gated satellite-minutes with their lvl3 keys and ``source_file``.
+    """Feature table of one raw or lvl0 file: selected satellite-minutes with their lvl3 keys and ``source_file``.
 
     Any .pq/.parquet input is read as lvl0 (old ones without ``_lvl0`` are
     shifted to UTC). Raises ValueError when the data are not 20 Hz.

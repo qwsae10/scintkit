@@ -61,7 +61,7 @@ def _channel_products(i):
 # Signal classification (lvl3 only); probabilities are NaN where ml_class is Unclassified.
 _CLASSIFICATION = [
     ("ml_class", "string", "", "cause of the C/N0 fluctuation: Multipath, RFI or Scintillation; "
-     "Unclassified when S4 < 0.2, single frequency, sample gate not met or classifier not run"),
+     "Unclassified when S4 < 0.2, single frequency, too few samples or classifier not run"),
     ("ml_prob_multipath", "float32", "", "model probability of Multipath"),
     ("ml_prob_rfi", "float32", "", "model probability of RFI"),
     ("ml_prob_scintillation", "float32", "", "model probability of Scintillation"),

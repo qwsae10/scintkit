@@ -1,4 +1,4 @@
-"""Label gated satellite-minutes as Multipath, RFI or Scintillation with the bundled model.
+"""Label satellite-minutes as Multipath, RFI or Scintillation with the bundled model.
 
 If scikit-learn cannot be imported, every minute is "Unclassified".
 """
@@ -24,7 +24,7 @@ PROBABILITY_COLUMNS = {
 }
 ML_COLUMNS = ["ml_class", *PROBABILITY_COLUMNS.values()]
 UNCLASSIFIED = "Unclassified"  # ml_class of every minute the model did not label
-# The model labels a featured minute only above this channel-1 S4 (the trained feature gate is 0.15).
+# The model labels a featured minute only above this channel-1 S4 (features start at FEATURE_MIN_S4 = 0.15).
 ML_CLASSIFY_MIN_S4 = 0.2
 TEC_POWER = "tec12_power_db_1_10_hz"  # NaN when the minute has no usable dual-frequency TEC
 

@@ -1,1 +1,1 @@
-"""Signal classification (Multipath, RFI, Scintillation) of gated satellite-minutes: features and model."""
+"""Signal classification (Multipath, RFI, Scintillation) of satellite-minutes: features and model."""

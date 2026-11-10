@@ -49,7 +49,7 @@ def synthetic_lvl0(minutes=4, seed=7):
         frame = pd.DataFrame(out)
         keep = rng.random(n) > 0.002
         if svid == 3:
-            keep &= ~((t >= 150) & (t < 155))  # minute 2 of G03 fails the sample gate
+            keep &= ~((t >= 150) & (t < 155))  # minute 2 of G03 has too few samples
         frames.append(frame[keep])
     df = pd.concat(frames, ignore_index=True).sort_values(["_order", "cons", "svid"], kind="stable")
     return df.drop(columns="_order").reset_index(drop=True)
