@@ -35,7 +35,9 @@ FEATURE_MIN_SAMPLES = 1190
 FEATURE_MIN_S4 = 0.15
 
 # Common mode: per satellite pass, C/N0 minus its centred rolling median; then the
-# median over satellites above the elevation mask at each receiver epoch.
+# median over satellites above the elevation mask at each receiver epoch. A drop
+# shared by all satellites at once points to interference at the receiver rather
+# than to scintillation or multipath on one signal path.
 COMMON_WINDOW = "5min"
 COMMON_MIN_FRACTION = 0.5  # of the window's samples needed for a median
 COMMON_PASS_GAP = "30min"  # a longer gap starts a new pass
@@ -76,7 +78,12 @@ def band_powers_db(values, detrend):
 
 
 def minute_grid(time_ns, values, minute_ns):
-    """``(values on the 1200-slot grid with gaps filled linearly, valid count)``; None if too few or bad times."""
+    """Put one channel's samples of a minute on the 1200-slot 20 Hz grid and fill gaps linearly.
+
+    Returns ``(grid, number of valid samples)``. The grid is None when a sample
+    falls outside the minute, two samples share a slot, or FEATURE_MIN_SAMPLES
+    or fewer samples are valid.
+    """
     period = 10**9 // FS_HZ
     slots = np.rint((time_ns - minute_ns) / period).astype(int)
     if np.any((slots < 0) | (slots >= MINUTE_SAMPLES)) or len(np.unique(slots)) != len(slots):
@@ -96,6 +103,7 @@ def minute_grid(time_ns, values, minute_ns):
 
 
 def _common_stats(values):
+    """Population standard deviation (as in training), median, 95th and 99th percentiles, and count."""
     return pd.Series({
         "std": float(np.std(values.to_numpy(dtype=float), ddof=0)),
         "median": values.median(),
@@ -106,11 +114,13 @@ def _common_stats(values):
 
 
 def common_mode(time_ns, epoch, elev, snr, passes):
-    """Per UTC minute (ns index): stats of the receiver-wide common C/N0 deviation (dB-Hz) of each channel.
+    """Statistics per UTC minute of the C/N0 deviation (dB-Hz) shared by all satellites, for each channel.
 
-    ``snr`` is (n, 2) float; ``passes`` lists the time-sorted row positions of each satellite pass.
+    ``snr`` is (n, 2) float and ``passes`` lists the time-sorted row positions
+    of each satellite pass. The result is indexed by minute start (ns).
     """
     min_periods = max(1, math.ceil(pd.Timedelta(COMMON_WINDOW).total_seconds() * FS_HZ * COMMON_MIN_FRACTION))
+    # Deviation of every sample from its pass's rolling median.
     delta = np.full(snr.shape, np.nan)
     for pos in passes:
         series = pd.DataFrame(snr[pos], index=pd.DatetimeIndex(time_ns[pos]))
@@ -121,6 +131,7 @@ def common_mode(time_ns, epoch, elev, snr, passes):
     out = []
     for i in (1, 2):
         names = {**{stat: f"common_delta_snr{i}_{stat}_dbhz" for stat in COMMON_STATS}, "n": f"n_common_delta_snr{i}"}
+        # Median deviation over the satellites seen at each receiver epoch, then statistics per minute.
         valid = elevation_ok & np.isfinite(delta[:, i - 1])
         rows = pd.DataFrame({"epoch": epoch[valid], "delta": delta[valid, i - 1],
                              "minute": time_ns[valid] // MINUTE_NS * MINUTE_NS})
