@@ -17,12 +17,11 @@ products. The products are written as Parquet files with a fixed column schema.
 ```bash
 git clone https://github.com/qwsae10/scintkit.git
 cd scintkit
-python -m pip install -e ".[ml]"
+python -m pip install -e .
 ```
 
-The `ml` extra installs scikit-learn 1.6.1, which is the version used to train
-the bundled signal classifier. Without it the pipeline runs normally and every
-minute is labeled `Unclassified`. Use `".[dev]"` to install pytest.
+scikit-learn is pinned to 1.6.1, the version used to train the bundled signal
+classifier. Use `".[dev]"` to also install pytest.
 
 ## Data levels
 

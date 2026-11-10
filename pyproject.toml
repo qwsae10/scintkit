@@ -19,19 +19,14 @@ dependencies = [
   "scipy>=1.15,<2",
   "h5py",
   "matplotlib",
-]
-
-
-[project.optional-dependencies]
-dev = [
-  "matplotlib",
-  "pytest",
-]
-# Signal classification; the bundled model was pickled with scikit-learn 1.6.1.
-ml = [
+  # The bundled signal classifier was pickled with scikit-learn 1.6.1 and
+  # may not load with another version.
   "scikit-learn==1.6.1",
   "joblib>=1.2",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest"]
 
 [project.scripts]
 scintkit-ml-features = "scintkit.machine_learning.features:main"

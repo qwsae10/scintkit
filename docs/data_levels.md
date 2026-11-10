@@ -122,7 +122,7 @@ when any of the following conditions is true.
 3. Either channel has 1190 or fewer of the 1200 samples of the minute.
 4. The data are not sampled at 20 Hz. The classifier was trained on 20 Hz
    ScintPi 3 data, so ScintPi 4 files (50 Hz) are not classified.
-5. scikit-learn is not installed, or classification was turned off.
+5. scikit-learn could not be imported, or classification was turned off.
 
 The metadata entry `ml_classifier_ran` states whether the classifier ran on
 the file.

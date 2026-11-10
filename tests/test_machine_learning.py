@@ -177,7 +177,7 @@ def test_missing_scikit_learn_leaves_every_minute_unclassified(monkeypatch, prod
     finally:
         classify.load_model.cache_clear()
     assert out["ml_class"].eq(classify.UNCLASSIFIED).all() and len(out) == len(minute)
-    assert "scikit-learn is not installed" in meta["ml_classification"]
+    assert "scikit-learn could not be imported" in meta["ml_classification"]
 
 
 def test_importing_the_pipeline_does_not_import_scikit_learn():

@@ -50,7 +50,7 @@ def process_file(path, output_dir, mode="both", fs=None, overwrite=False, classi
     ``mode`` is "lvl0", "lvl2", "lvl3" or "both" (lvl2 and lvl3); raw input
     also gets its lvl0 file. Existing outputs are kept unless ``overwrite``.
     ``fs`` (Hz) is detected from the data when None. With ``classify`` lvl3
-    gets the signal class of gated minutes (20 Hz data and the ``ml`` extra).
+    gets the signal class of gated minutes (20 Hz data only).
     """
     path = os.fspath(path)
     is_lvl0 = is_lvl0_parquet(path)

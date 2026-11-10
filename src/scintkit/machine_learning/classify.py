@@ -1,6 +1,6 @@
 """Label gated satellite-minutes as Multipath, RFI or Scintillation with the bundled model.
 
-Needs the ``ml`` extra (scikit-learn, joblib); without it every minute is "Unclassified".
+If scikit-learn cannot be imported, every minute is "Unclassified".
 """
 
 import functools
@@ -96,7 +96,7 @@ def classify_minutes(frame, minute, fs):
                         labels["ml_class"].value_counts().to_dict())
             return out, {"ml_classification": "on", "ml_classifier_ran": "true", **model_metadata()}
         except ImportError as error:
-            reason = f"skipped: scikit-learn is not installed or not importable (pip install 'scintkit[ml]'): {error}"
+            reason = f"skipped: scikit-learn could not be imported: {error}"
         except Exception as error:  # the classifier must never fail the file
             logger.exception("classification failed")
             reason = f"failed: {type(error).__name__}: {error}"
