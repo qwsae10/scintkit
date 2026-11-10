@@ -54,6 +54,7 @@ def compute_s4_corrected(snr):
     if mean <= 0:
         return np.nan
     s4 = std / mean
+    # S4 that receiver noise alone produces at this mean C/N0 (linear, Hz).
     s4_noise = np.sqrt(100 / mean * (1 + 500 / (19 * mean)))
     val = s4**2 - s4_noise**2
     return np.sqrt(val) if val > 0 else 0
