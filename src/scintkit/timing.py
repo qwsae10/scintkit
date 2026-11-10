@@ -67,25 +67,29 @@ def _grid_slots(times, period):
     if not ok.any(axis=1).all():
         raise ValueError("timestamps too far from the sampling grid")
 
+    # cost[s] is (skipped slots, squared residual) of the best path that puts the
+    # current epoch in candidate slot s. back[e, s] is the candidate the previous
+    # epoch took on that path. Tuples compare skipped slots first.
     cand_l, err_l, ok_l = cand.tolist(), (resid**2).tolist(), ok.tolist()
-    none = (np.inf, np.inf)
-    cost = [(0, err_l[0][s]) if ok_l[0][s] else none for s in (0, 1)]
+    unreachable = (np.inf, np.inf)
+    cost = [(0, err_l[0][s]) if ok_l[0][s] else unreachable for s in (0, 1)]
     back = np.zeros((len(times), 2), dtype=np.int8)
     for e in range(1, len(times)):
-        new = [none, none]
+        new = [unreachable, unreachable]
         for s in (0, 1):
             if not ok_l[e][s]:
                 continue
             for p in (0, 1):
                 step = cand_l[e][s] - cand_l[e - 1][p]
-                if step >= 1 and cost[p] != none:
+                if step >= 1 and cost[p] != unreachable:
                     c = (cost[p][0] + step - 1, cost[p][1] + err_l[e][s])
                     if c < new[s]:
                         new[s], back[e, s] = c, p
-        if new == [none, none]:
+        if new == [unreachable, unreachable]:
             raise ValueError(f"no increasing grid path at epoch {e}")
         cost = new
 
+    # Walk back from the cheaper final candidate.
     slots = np.empty(len(times), dtype=np.int64)
     s = 0 if cost[0] <= cost[1] else 1
     for e in range(len(times) - 1, -1, -1):
