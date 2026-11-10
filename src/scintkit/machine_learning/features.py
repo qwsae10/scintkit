@@ -141,6 +141,39 @@ def _satellite_positions(frame, time_ns):
             for prn, pos in frame.groupby("prn", sort=False, observed=True).indices.items()}
 
 
+def _split_passes(satellites, time_ns):
+    """Row positions of every satellite pass: each satellite's rows split at gaps longer than COMMON_PASS_GAP."""
+    gap = pd.Timedelta(COMMON_PASS_GAP).value
+    passes = []
+    for pos in satellites.values():
+        passes += [p for p in np.split(pos, np.flatnonzero(np.diff(time_ns[pos]) > gap) + 1) if len(p)]
+    return passes
+
+
+def _minute_features(time_ns, snr, tec, rows, minute_ns):
+    """Band powers, S4 and sample counts of one satellite-minute (``rows``); None if it is not selected."""
+    values = snr[rows]
+    if np.isfinite(values).sum(axis=0).min() <= FEATURE_MIN_SAMPLES:
+        return None
+    linear = 10 ** (values / 10)  # float64 as in training; lvl3 s4_1 uses float32 C/N0
+    s4 = np.nanstd(linear, axis=0) / np.nanmean(linear, axis=0)
+    if not s4[0] > FEATURE_MIN_S4:  # written this way so a NaN S4 is rejected too
+        return None
+    times = time_ns[rows]
+    snr1, n1 = minute_grid(times, values[:, 0], minute_ns)
+    snr2, n2 = minute_grid(times, values[:, 1], minute_ns)
+    if snr1 is None or snr2 is None:
+        return None
+    tec12, n_tec = minute_grid(times, tec[rows], minute_ns)
+    tec_powers = band_powers_db(tec12, "linear") if tec12 is not None else [np.nan] * len(BANDS)
+    return [*band_powers_db(snr1, "median"), *band_powers_db(snr2, "median"), *tec_powers, *s4, n1, n2, n_tec]
+
+
+# Columns of a _minute_features row, after prn and minute_ns.
+MINUTE_COLUMNS = [f for f in FEATURES if "_power_db_" in f] + ["s4_1", "s4_2", "n_samples", "n_snr2_samples",
+                                                               "n_tec12_samples"]
+
+
 def compute_features(frame):
     """FEATURES and counts for every selected satellite-minute of a 20 Hz full-rate frame (after compute_products).
 
@@ -152,44 +185,26 @@ def compute_features(frame):
     snr = np.column_stack([frame["snr1"].to_numpy(dtype=float), frame["snr2"].to_numpy(dtype=float)])
     tec = frame["tec_cph12"].to_numpy(dtype=float)
     satellites = _satellite_positions(frame, time_ns)
-    gap = pd.Timedelta(COMMON_PASS_GAP).value
-    passes = [p for pos in satellites.values()
-              for p in np.split(pos, np.flatnonzero(np.diff(time_ns[pos]) > gap) + 1) if len(p)]
-    common = common_mode(time_ns, frame["epoch"].to_numpy(), frame["elev"].to_numpy(dtype=float), snr, passes)
-    del passes
+    common = common_mode(time_ns, frame["epoch"].to_numpy(), frame["elev"].to_numpy(dtype=float), snr,
+                         _split_passes(satellites, time_ns))
 
     records = []
     for prn, pos in satellites.items():
         minutes = time_ns[pos] // MINUTE_NS
-        bounds = np.r_[0, np.flatnonzero(np.diff(minutes)) + 1, len(pos)]
+        bounds = np.r_[0, np.flatnonzero(np.diff(minutes)) + 1, len(pos)]  # where the minute changes
         for start, stop in zip(bounds[:-1], bounds[1:]):
-            rows = pos[start:stop]
-            values = snr[rows]
-            counts = np.isfinite(values).sum(axis=0)
-            if counts.min() <= FEATURE_MIN_SAMPLES:
-                continue
-            linear = 10 ** (values / 10)  # float64 as in training; lvl3 s4_1 uses float32 C/N0
-            s4 = np.nanstd(linear, axis=0) / np.nanmean(linear, axis=0)
-            if not s4[0] > FEATURE_MIN_S4:
-                continue
             minute_ns = int(minutes[start]) * MINUTE_NS
-            snr1, n1 = minute_grid(time_ns[rows], values[:, 0], minute_ns)
-            snr2, n2 = minute_grid(time_ns[rows], values[:, 1], minute_ns)
-            if snr1 is None or snr2 is None:
-                continue
-            tec12, n_tec = minute_grid(time_ns[rows], tec[rows], minute_ns)
-            tec_powers = band_powers_db(tec12, "linear") if tec12 is not None else [np.nan] * len(BANDS)
-            records.append([prn, minute_ns, *band_powers_db(snr1, "median"), *band_powers_db(snr2, "median"),
-                            *tec_powers, *s4, n1, n2, n_tec])
+            row = _minute_features(time_ns, snr, tec, pos[start:stop], minute_ns)
+            if row is not None:
+                records.append([prn, minute_ns, *row])
 
-    spectral = [f for f in FEATURES if "power" in f]
-    table = pd.DataFrame(records, columns=["prn", "minute_ns", *spectral, "s4_1", "s4_2", *COUNTS[:3]])
+    table = pd.DataFrame(records, columns=["prn", "minute_ns", *MINUTE_COLUMNS])
     table = table.join(common, on="minute_ns")
     table.insert(1, "datetime", pd.to_datetime(table.pop("minute_ns")))
     for column in COUNTS:
         table[column] = table[column].astype("Int64")
-    return table[["prn", "datetime", *FEATURES, *COUNTS]].sort_values(["datetime", "prn"], kind="stable") \
-        .reset_index(drop=True)
+    table = table[["prn", "datetime", *FEATURES, *COUNTS]]
+    return table.sort_values(["datetime", "prn"], kind="stable").reset_index(drop=True)
 
 
 # --- Export for retraining ------------------------------------------------
