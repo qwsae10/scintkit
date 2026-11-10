@@ -38,6 +38,25 @@ def _repair_tec_pair(values, fs, threshold=TEC_SLIP_THRESHOLD_TECU):
     })
 
 
+def _segment_starts(time, carrier_valid, gap_ns):
+    """True where a new levelling segment starts: after a time step or a carrier outage longer than ``gap_ns``.
+
+    ``time`` (ns) and ``carrier_valid`` belong to one satellite in time order.
+    """
+    new = np.zeros(len(time), dtype=bool)
+    if len(time) < 2:
+        return new
+    nat = np.datetime64("NaT", "ns").astype("int64")
+    new[1:] = (np.diff(time) > gap_ns) | (time[1:] == nat)
+    # Position of the latest valid carrier sample before each row, -1 if there is none.
+    last_valid = np.maximum.accumulate(np.where(carrier_valid, np.arange(len(time)), -1))
+    previous = np.r_[-1, last_valid[:-1]]
+    has_previous = previous >= 0
+    new[has_previous] |= carrier_valid[has_previous] & (time[has_previous] - time[previous[has_previous]] > gap_ns)
+    new[0] = False
+    return new
+
+
 def _float_column(df, column):
     return pd.to_numeric(df[column], errors="coerce").to_numpy(dtype=float)
 
@@ -68,7 +87,6 @@ def add_tec_columns(df, pair="13", *, fs, max_gap=TEC_MAX_GAP, copy=True):
         time_all = pd.to_datetime(df["datetime"], errors="coerce").to_numpy(
             dtype="datetime64[ns]"
         ).astype("int64")
-        nat = np.datetime64("NaT", "ns").astype("int64")
     else:
         time_all = None
 
@@ -95,20 +113,10 @@ def add_tec_columns(df, pair="13", *, fs, max_gap=TEC_MAX_GAP, copy=True):
             rng1[pseudo_valid], rng2[pseudo_valid], f1_hz[pseudo_valid], f2_hz[pseudo_valid]
         )
 
-        new_segment = np.zeros(len(positions), dtype=bool)
-        if time_all is not None and len(positions) > 1:
-            time = time_all[positions]
-            new_segment[1:] = (np.diff(time) > gap_ns) | (time[1:] == nat)
-            # A carrier outage longer than max_gap also starts a new segment.
-            last_valid = np.maximum.accumulate(
-                np.where(carrier_valid, np.arange(len(positions)), -1)
-            )
-            previous_valid = np.r_[-1, last_valid[:-1]]
-            has_previous = previous_valid >= 0
-            new_segment[has_previous] |= carrier_valid[has_previous] & (
-                time[has_previous] - time[previous_valid[has_previous]] > gap_ns
-            )
-            new_segment[0] = False
+        if time_all is None:
+            new_segment = np.zeros(len(positions), dtype=bool)
+        else:
+            new_segment = _segment_starts(time_all[positions], carrier_valid, gap_ns)
 
         boundaries = np.r_[0, np.flatnonzero(new_segment), len(positions)]
         for start, stop in zip(boundaries[:-1], boundaries[1:]):
