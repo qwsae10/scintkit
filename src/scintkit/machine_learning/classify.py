@@ -85,20 +85,25 @@ def classify_minutes(frame, minute, fs):
     is logged and every minute is UNCLASSIFIED.
     """
     if fs != FS_HZ:
-        reason = f"skipped: the model needs {FS_HZ} Hz data, got {fs:g} Hz"
-    else:
-        try:
-            labels = classify(classifiable(compute_features(frame)))
-            out = unclassified(minute).set_index(["prn", "datetime"])
-            out.update(labels.set_index(["prn", "datetime"]))
-            out = out.reset_index()[list(minute.columns) + ML_COLUMNS]
-            logger.info("classified %d satellite-minutes: %s", len(labels),
-                        labels["ml_class"].value_counts().to_dict())
-            return out, {"ml_classification": "on", "ml_classifier_ran": "true", **model_metadata()}
-        except ImportError as error:
-            reason = f"skipped: scikit-learn could not be imported: {error}"
-        except Exception as error:  # the classifier must never fail the file
-            logger.exception("classification failed")
-            reason = f"failed: {type(error).__name__}: {error}"
+        return _skip(minute, f"skipped: the model needs {FS_HZ} Hz data, got {fs:g} Hz")
+    try:
+        labels = classify(classifiable(compute_features(frame)))
+        keys = ["prn", "datetime"]
+        out = unclassified(minute).set_index(keys)
+        out.update(labels.set_index(keys))
+        out = out.reset_index()[list(minute.columns) + ML_COLUMNS]
+        meta = {"ml_classification": "on", "ml_classifier_ran": "true", **model_metadata()}
+    except ImportError as error:
+        return _skip(minute, f"skipped: scikit-learn could not be imported: {error}")
+    except Exception as error:  # the classifier must never fail the file
+        logger.exception("classification failed")
+        return _skip(minute, f"failed: {type(error).__name__}: {error}")
+
+    logger.info("classified %d satellite-minutes: %s", len(labels), labels["ml_class"].value_counts().to_dict())
+    return out, meta
+
+
+def _skip(minute, reason):
+    """Every minute UNCLASSIFIED, with ``reason`` logged and written to the metadata."""
     logger.warning("signal classification %s", reason)
     return unclassified(minute), {"ml_classification": reason, "ml_classifier_ran": "false"}
