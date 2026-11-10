@@ -1,4 +1,4 @@
-"""Assemble a labelled training set from per-file feature tables (``scintkit-ml-features`` output).
+"""Assemble a labeled training set from per-file feature tables (``scintkit-ml-features`` output).
 
 Each site has one label; a row is kept when its S4 and elevation pass that
 label's rule (and, for scintillation, it is local night). Example with the

@@ -25,7 +25,7 @@ def carrier_phase_tec(phi1_cyc, phi2_cyc, f1_hz, f2_hz):
 
 
 def pseudorange_tec(P1_m, P2_m, f1_hz, f2_hz):
-    """Absolute but noisy TEC in TECU from pseudoranges in metres."""
+    """Absolute but noisy TEC in TECU from pseudoranges in meters."""
     return _tec_factor(f1_hz, f2_hz) * (P2_m - P1_m) / TECU
 
 
@@ -39,7 +39,7 @@ def _repair_tec_pair(values, fs, threshold=TEC_SLIP_THRESHOLD_TECU):
 
 
 def _segment_starts(time, carrier_valid, gap_ns):
-    """True where a new levelling segment starts: after a time step or a carrier outage longer than ``gap_ns``.
+    """True where a new leveling segment starts: after a time step or a carrier outage longer than ``gap_ns``.
 
     ``time`` (ns) and ``carrier_valid`` belong to one satellite in time order.
     """

@@ -13,7 +13,7 @@ from scintkit.constants import (
 
 
 def add_detrended_snr(df, i=1):
-    """Add ``snr{i}_avg`` (centred moving average, dB) and ``snr{i}_new`` (detrended SNR, dB).
+    """Add ``snr{i}_avg`` (centered moving average, dB) and ``snr{i}_new`` (detrended SNR, dB).
 
     The detrended SNR is offset by DETRENDED_SNR_OFFSET_DB so it stays positive.
     Requires a RangeIndex.
@@ -61,7 +61,7 @@ def compute_s4_corrected(snr):
 
 
 def compute_tau(snr, fs):
-    """Decorrelation time (s): the first lag at which the normalised autocorrelation of the
+    """Decorrelation time (s): the first lag at which the normalized autocorrelation of the
     linear intensity 10**(snr/10) drops below 0.5.
 
     NaN with fewer than MIN_TAU_SECONDS * fs samples, flat input, or no such lag.

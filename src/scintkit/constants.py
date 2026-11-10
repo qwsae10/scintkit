@@ -75,11 +75,11 @@ SPEED_OF_LIGHT = 299792458  # m/s
 IONO_CONSTANT = 40.3  # m^3/s^2, first-order ionospheric refraction
 TECU = 1e16  # electrons/m^2
 TEC_SLIP_THRESHOLD_TECU = 1
-TEC_MAX_GAP = "5min"  # a longer gap starts a new levelling segment
+TEC_MAX_GAP = "5min"  # a longer gap starts a new leveling segment
 
 # --- Amplitude --------------------------------------------------------------
 
-SNR_DETREND_WINDOW = "10s"  # centred moving average removed from SNR
+SNR_DETREND_WINDOW = "10s"  # centered moving average removed from SNR
 DETRENDED_SNR_OFFSET_DB = 40  # added back so detrended SNR stays positive
 MIN_TAU_SECONDS = 50  # of valid SNR per minute needed for tau
 MIN_UNIQUE_SNR = 2

@@ -36,7 +36,7 @@ _FIRST_SAMPLE = [
     ("rng3", "float64", "m", "pseudorange of channel 3, first sample of the interval"),
     ("elev", "float32", "deg", "elevation, first sample; NaN where the receiver had no orbit"),
     ("azim", "float32", "deg", "azimuth, first sample; NaN where the receiver had no orbit"),
-    ("tec_cph12", "float64", "TECU", "carrier-phase slant TEC levelled to tec_rng12, first sample"),
+    ("tec_cph12", "float64", "TECU", "carrier-phase slant TEC leveled to tec_rng12, first sample"),
     ("tec_rng12", "float64", "TECU", "pseudorange slant TEC (uncalibrated biases), first sample"),
     ("tec_cph13", "float64", "TECU", "as tec_cph12 for channels 1 and 3, first sample"),
     ("tec_rng13", "float64", "TECU", "as tec_rng12 for channels 1 and 3, first sample"),

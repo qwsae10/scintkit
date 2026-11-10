@@ -130,7 +130,7 @@ def test_three_channel_products():
         assert column in minute, column
     middle = minute[minute["datetime"] == pd.Timestamp("2026-11-08 12:01")]
     assert middle["sigma_phi_3"].between(0, 0.2).all() and middle["s4_3"].between(0, 0.3).all()
-    # TEC is levelled to the pseudorange TEC (20 TECU at the start) for both pairs.
+    # TEC is leveled to the pseudorange TEC (20 TECU at the start) for both pairs.
     assert frame["tec_cph13"].median() == pytest.approx(frame["tec_cph12"].median(), abs=1)
     lvl3 = assemble(frame, unclassified(minute), "1min")
     assert list(lvl3.columns) == [c[0] for c in schema.LVL3_COLUMNS]

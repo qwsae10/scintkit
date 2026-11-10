@@ -34,7 +34,7 @@ MINUTE_SAMPLES = 60 * FS_HZ
 FEATURE_MIN_SAMPLES = 1190
 FEATURE_MIN_S4 = 0.15
 
-# Common mode: per satellite pass, C/N0 minus its centred rolling median; then the
+# Common mode: per satellite pass, C/N0 minus its centered rolling median; then the
 # median over satellites above the elevation mask at each receiver epoch. A drop
 # shared by all satellites at once points to interference at the receiver rather
 # than to scintillation or multipath on one signal path.
@@ -68,7 +68,7 @@ def band_powers_db(values, detrend):
     values = np.asarray(values, dtype=float)
     prepared = values - np.median(values) if detrend == "median" else signal.detrend(values, type="linear")
     freqs, psd = signal.periodogram(prepared, fs=FS_HZ, window="boxcar", detrend=False, scaling="density")
-    tolerance = np.finfo(float).eps * FS_HZ * 8  # band edges are shared by neighbouring bands
+    tolerance = np.finfo(float).eps * FS_HZ * 8  # band edges are shared by neighboring bands
     powers = []
     for _, low, high in BANDS:
         selected = (freqs >= low - tolerance) & (freqs <= high + tolerance)
