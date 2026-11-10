@@ -142,7 +142,7 @@ def process_parallel(files, output_dir, n_workers=4, mode="both", fs=None, overw
                      classify=True):
     """:func:`process` with one file per task on ``n_workers`` processes; a failure never stops the pool.
 
-    A 4 h 20 Hz file needs about 20 GB of memory, so size ``n_workers`` to the machine.
+    A 4 h 20 Hz file needs about 7 GB of memory, so size ``n_workers`` to the machine.
     """
     tasks = _tasks(files, output_dir, mode, fs, overwrite, mirror, classify)
     with Pool(n_workers, maxtasksperchild=1) as pool:
@@ -239,7 +239,7 @@ def main(argv=None):
     common.add_argument("--output", required=True,
                         help="output root; files go to <output>/<input folder name>/")
     common.add_argument("--workers", type=int, default=int(env("SLURM_CPUS_PER_TASK", 1)),
-                        help="parallel files (default: $SLURM_CPUS_PER_TASK or 1); ~20 GB each")
+                        help="parallel files (default: $SLURM_CPUS_PER_TASK or 1); ~7 GB each")
     common.add_argument("--mode", default="both", choices=list(LEVELS))
     common.add_argument("--fs", type=float, help="sampling rate in Hz (default: detect)")
     common.add_argument("--overwrite", action="store_true")
