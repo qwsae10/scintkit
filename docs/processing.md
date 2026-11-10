@@ -11,8 +11,10 @@ ScintPi 3 files are binary records with one record per satellite and receiver
 epoch. Each record holds the carrier-to-noise density ratio, carrier phase,
 and pseudorange of the receiver channels, together with the elevation and
 azimuth of the satellite. The record layout depends on the firmware version in
-the file name. Firmware v325, v326c, v326d, v326e, and v326f are read. Other
-versions raise an `UnsupportedFirmware` error and are skipped.
+the file name. Firmware v325, v326c, v326d, v326e, and v326f are read. Files from
+other versions raise an `UnsupportedFirmware` error and are skipped. Readers
+for them are tracked in the
+[GitHub issues](https://github.com/qwsae10/scintkit/issues).
 
 ScintPi 4 files are in Septentrio Binary Format. They are converted to text
 with the Septentrio program `bin2asc` and then arranged in the same row layout.

@@ -10,7 +10,10 @@ products. The products are written as Parquet files with a fixed column schema.
 |---|---|---|
 | ScintPi 3 | `.bin` and `.bin.zip`, firmware v325, v326c, v326d, v326e, and v326f | Supported |
 | ScintPi 4 | Septentrio Binary Format (SBF) files of registered stations | Supported. The Septentrio RxTools program `bin2asc` is required. |
-| ScintPi 2 and other ScintPi 3 firmware | v224, v226f, v322, v324, v326, and v326h | Not supported. These files are reported as unsupported and skipped. |
+
+Files from other firmware versions are skipped and listed as unsupported in
+the processing summary. Readers for them are tracked in the
+[GitHub issues](https://github.com/qwsae10/scintkit/issues).
 
 ## Installation
 
